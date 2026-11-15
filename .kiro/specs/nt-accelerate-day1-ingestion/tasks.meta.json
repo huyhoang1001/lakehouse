@@ -1,0 +1,29 @@
+{
+  "pbtResults": {},
+  "executionHistory": {
+    "1.1 Create `infra/` layout: `versions.tf`, `variables.tf`, `locals.tf`, `providers.tf`": [
+      {
+        "executionId": "4475dbe7-daeb-4419-83c7-69afd53723d6",
+        "chatSessionId": "sess_e293f23e-e3e5-43c5-9a65-e87801157fcb",
+        "timestamp": 1794740504518
+      },
+      {
+        "executionId": "4475dbe7-daeb-4419-83c7-69afd53723d6",
+        "chatSessionId": "sess_e293f23e-e3e5-43c5-9a65-e87801157fcb",
+        "timestamp": 1794740643739
+      }
+    ],
+    "1.2 Pin AWS provider `~> 5.0`, region `us-east-1`; configure from `AWS_*` env / shared credentials": [
+      {
+        "executionId": "87f04592-0660-4798-9e4a-86826bae172a",
+        "chatSessionId": "sess_6ade4e82-0b8d-48f2-bab4-4a8194808af0",
+        "timestamp": 1794741042795
+      },
+      {
+        "executionId": "87f04592-0660-4798-9e4a-86826bae172a",
+        "chatSessionId": "sess_6ade4e82-0b8d-48f2-bab4-4a8194808af0",
+        "timestamp": 1794741108186
+      }
+    ]
+  }
+}

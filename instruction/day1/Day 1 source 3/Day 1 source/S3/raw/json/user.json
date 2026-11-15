@@ -1,0 +1,54 @@
+[
+	{
+		"user_name": "ABC123ABC",
+		"first_name": "Veum",
+		"last_name": "Butterburg",
+		"email": "isidro_von@hotmail.com",
+		"phone": "{700)03934838",
+		"address": {
+			"street": "6649 N Blue Gum St",
+			"city": "New Orleans",
+			"state": "LA",
+			"zip": "70116"
+		}
+	},
+	{
+		"user_name": "MNA123ABC",
+		"first_name": "Josephine",
+		"last_name": "Darakjy",
+		"email": "braxton29@hotmail.com",
+		"phone": "{700)03934838",
+		"address": {
+			"street": "4 B Blue Ridge Blvd",
+			"city": "Brighton",
+			"state": "MI",
+			"zip": "48116"
+		}
+	},
+	{
+		"user_name": "XYZ123ABC",
+		"first_name": "Art",
+		"last_name": "Vinh",
+		"email": "pascale5@yahoo.com",
+		"phone": "{700)03934838",
+		"address": {
+			"street": "8 W Cerritos Ave #54",
+			"city": "Bridgeport",
+			"state": "NJ",
+			"zip": "08014"
+		}
+	},
+	{
+		"user_name": "KMN123ABC",
+		"first_name": "Art",
+		"last_name": "Chemel",
+		"email": "pascale5@yahoo.com",
+		"phone": "{700)03934838",
+		"address": {
+			"street": "8 W Cerritos Ave #54",
+			"city": "Bridgeport",
+			"state": "NJ",
+			"zip": "08014"
+		}
+	}
+]

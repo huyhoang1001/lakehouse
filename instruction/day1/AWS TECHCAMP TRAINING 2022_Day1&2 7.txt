@@ -1,0 +1,1117 @@
+AWS TECHCAMP TRAINING 2022 
+
+DAY 1: EXTRACT DATA FROM RDS SQL TICKIT DATABASE TO S3 USING GLUE 
+
+There are 7 tables in Tickit database 
+
+Table Name 
+
+Extract Type 
+
+dbo.category 
+
+Full Load 
+
+dbo.date 
+
+write a script to automatically generate data at once 
+
+dbo.event 
+
+Full Load 
+
+dbo.users 
+
+Full Load 
+
+dbo.venue 
+
+Full Load 
+
+dbo.sales 
+
+Incremental load (saletime) 
+
+
+
+ 
+
+I. Preparation 
+1. Create a bucket ntaccelerate which contains folders as below 
+
+
+ 
+
+ 
+
+2. Create Glue Role 
+- Go to IAM -> Roles -> Create role -> Add permissions -> Include some policies as below 
+
+
+ 
+
+- Save role with name is “NT_Accelerate_GlueRole” 
+
+
+ 
+
+II. Build Glue Job 
+
+
+II.1. Create Glue connection 
+
+- In aws Glue, select Connections on the left -> Click Create connection 
+
+
+
+- In Create connection pop-up, input information as below 
+✓ Name: conRDS_tickit 
+✓ Connection type: JDBC 
+✓ JDBC URL: jdbc:sqlserver://nt-accelarate.c1q8swyllcmw.us-east-
+1.rds.amazonaws.com:1433;database=tickit; 
+✓ Credential type: Username and password 
+✓ Username: xxxx 
+✓ Password: xxxx 
+- Click Create connection to complete 
+
+
+ 
+
+ 
+
+ 
+
+II.2 Test connection 
+
+- In AWS Glue, under Legacy pages, select Connection (legacy) 
+
+
+
+ 
+
+- In Connection page, select connection has been just created above 
+- Click Test connection 
+
+
+ 
+
+- If connection is OK, go to next step to create Crawler 
+
+
+II.3 Create Crawler to crawl tables in RDS 
+
+- In aws Glue, select Database under Data Catalog -> Add database -> Create tickit database 
+- In aws Glue, select Crawlers on the left side -> Click Create crawler 
+- Input crawler name: “NT_Accelerate_cwl_RDSTickit”, then click Next 
+- In Choose data sources and classifier, select Not yet in “Is your data already mapped to Glue 
+tables?” 
+- Click “Add a data source” and input as below 
+
+
+ 
+
+
+ 
+
+◼ Note: because we crawl a whole database so “tickit” (database name) is input in include 
+path. In the case crawl schema or table, we can follow the rue 
+
+Database/schema/table 
+
+ 
+
+- Click Add a JDBC data source and Next 
+
+
+ 
+
+ 
+
+ 
+
+- Select IAM role in Configure security settings 
+
+
+ 
+
+ 
+
+ 
+
+- Select Target database in Output configuration 
+
+
+ 
+
+
+ 
+
+ 
+
+- Click Next to create crawler 
+
+
+ 
+
+II.4 Run crawler 
+
+- In AWS Glue, select Crawlers on the left side 
+- Select crawler “NT_Accelerate_cwl_RDSTickit” created above 
+- Click Run button 
+- If run successfully, table’s schemas will be created in database “tickit” as below 
+
+
+ 
+
+ 
+
+II.5 Create Job 
+
+a. Create job to extract data from Catalog table to data lake 
+- In AWS glue, create job with name “jb_Stg_Extract_Category” 
+- Copy script jb_Stg_Extract_Category.py in folder /Glue_script 
+- In Job details tab, input information as below: 
+
+
+◼ Basic properties 
+
+✓ IAM Role: “NT_Accelerate_GlueRole” 
+✓ Type: Spark 
+
+
+
+✓ Glue version: Glue 3.0 
+✓ Language: Python 3 
+✓ Worker type: G 1X 
+✓ Requested number of workers: 2 
+✓ Job bookmark: Enable 
+✓ Number of retries: 0 
+✓ Job timeout: 15 minutes 
+
+
+ 
+
+◼ Advanced properties 
+
+✓ Script path: s3://ntaccelerate/glue_script/ 
+✓ Spark UI logs path: s3://ntaccelerate/sparkHistoryLogs/ 
+✓ Maximum concurrency: 1 
+✓ Temporary path: s3://ntaccelarate/temporary/ 
+
+
+ 
+
+◼ Job parameters 
+
+✓ --p_batch_id: 1 
+✓ --p_is_incremental_load: False 
+✓ --p_job_name: jb_Stg_Extract_Category 
+✓ --p_region: us-east-1 
+✓ --p_run_date: 2022-10-04 
+✓ --p_src_databaseName: tickit 
+✓ --p_src_tableName: tickit_dbo_category 
+✓ --p_tar_databaseName: s3://ntaccelerate/lake/bronze/tickit/ 
+✓ --p_tar_tablename: category 
+
+
+ 
+
+- Save and Run job 
+- If succeed, parquet files will be created in data lake. For instance 
+s3://ntaccelerate/lake/bronze/tickit/category/2022-10-14/ 
+
+
+ 
+
+
+ 
+
+b. Advanced job 
+
+
+When job runs, we need to record log to monitor if fails. In addition, we need to configure 
+parameter so that not modify code late. To do that, we add some dynamodb table as below: 
+
+1. NT_Accelerate_JOB_CONFIG table 
+- This table contains job’s configuration. When job runs, it will read info as parameters from this 
+table 
+
+
+NT_Accelerate_JOB_CONFIG 
+
+Column Name 
+
+Data Type 
+
+Description 
+
+ID 
+
+INT 
+
+Primary key 
+
+JOB_NAME 
+
+STRING 
+
+Job’s name MUST be the same with job’s name 
+in Glue Job 
+
+LAYER 
+
+STRING 
+
+Additional information, to identify job is working 
+at staging layer or data warehouse layer 
+
+INCREMENTAL_LOAD 
+
+STRING 
+
+✓ True: incremental load. 
+✓ False: full load 
+
+
+MULTIPLE_RUN 
+
+STRING 
+
+Allow run multiple times in day or not 
+
+✓ True: allow run multiple times in day 
+✓ False: run once a day 
+
+
+REGION_NAME 
+
+STRING 
+
+Region where job is working 
+
+SOURCE_TYPE 
+
+STRING 
+
+Addition information, such as RDS if data source 
+is relational database or flatfile is data source 
+are csv, xml, json.. 
+
+SRC_DBNAME 
+
+STRING 
+
+Source DB name 
+
+SRC_TBLNAME 
+
+STRING 
+
+Source table name 
+
+TRG_DBNAME 
+
+STRING 
+
+Target DB name 
+
+TRG_TBLNAME 
+
+STRING 
+
+Target table name 
+
+LAKEHOUSE_LOCATION 
+
+STRING 
+
+Used for jobs which migrate from data lake 
+(bronze) to delta lake (gold) 
+
+CATALOG_CON 
+
+STRING 
+
+Used for jobs which migrate from data lake 
+(bronze) to data warehouse Redshift 
+
+PRESCRIPT 
+
+STRING 
+
+Used for jobs which migrate from data lake 
+(bronze) to data warehouse Redshift 
+
+POSTSCRIPT 
+
+STRING 
+
+Used for jobs which migrate from data lake 
+(bronze) to data warehouse Redshift 
+
+TEMP_FOLDER 
+
+STRING 
+
+Used for jobs which migrate from data lake 
+(bronze) to data warehouse Redshift 
+
+
+
+ 
+
+Sample data 
+
+{ 
+
+ "ID": { 
+
+ "N": "1" 
+
+ }, 
+
+ "INCREMENTAL_LOAD": { 
+
+
+ "S": "False" 
+
+ }, 
+
+ "JOB_NAME": { 
+
+ "S": "jb_Stg_Extract_Category" 
+
+ }, 
+
+ "LAYER": { 
+
+ "S": "Staging" 
+
+ }, 
+
+ "MULTIPLE_RUN": { 
+
+ "S": "True" 
+
+ }, 
+
+ "REGION_NAME": { 
+
+ "S": "us-east-1" 
+
+ }, 
+
+ "SOURCE_TYPE": { 
+
+ "S": "RDS" 
+
+ }, 
+
+ "SRC_DBNAME": { 
+
+ "S": "tickit" 
+
+ }, 
+
+ "SRC_TBLNAME": { 
+
+ "S": "tickit_dbo_category" 
+
+ }, 
+
+ "TRG_DBNAME": { 
+
+ "S": "s3://ntaccelarate/lake/bronze/tickit/" 
+
+ }, 
+
+ "TRG_TBLNAME": { 
+
+ "S": "category" 
+
+ } 
+
+} 
+
+2. NT_Accelerate_WATERMARKTABLE table 
+- Used to configure for incremental job 
+
+
+NT_Accelerate_WATERMARKTABLE 
+
+Column Name 
+
+Data Type 
+
+Description 
+
+ID 
+
+INT 
+
+Primary key 
+
+JOB_NAME 
+
+STRING 
+
+Sort key 
+
+Job’s name which uses incremental load 
+
+COLUMN_NAMES 
+
+LIST 
+
+List of columns for watermark 
+
+DATA_TYPES 
+
+LIST 
+
+List of data types of columns for watermark 
+
+DATA_VALUES 
+
+LIST 
+
+List of latest values of columns for watermark. 
+These values will be updated (latest value or 
+maximum value) after each run 
+
+QUERY_STRING 
+
+STRING 
+
+Query string used for incremental load. For 
+example 
+
+select sellername, buyername, eventid, dateid, 
+qtysold, pricepaid, commission, saletime from 
+dbo.sales where 
+
+
+
+ 
+
+
+Sample data 
+
+{ 
+
+ "ID": { 
+
+ "N": "0" 
+
+ }, 
+
+ "JOB_NAME": { 
+
+ "S": "jb_Stg_Extract_Sales" 
+
+ }, 
+
+ "COLUMN_NAMES": { 
+
+ "L": [ 
+
+ { 
+
+ "S": "saletime" 
+
+ } 
+
+ ] 
+
+ }, 
+
+ "DATA_TYPES": { 
+
+ "L": [ 
+
+ { 
+
+ "S": "STRING" 
+
+ } 
+
+ ] 
+
+ }, 
+
+ "DATA_VALUES": { 
+
+ "L": [ 
+
+ { 
+
+ "S": "2008-12-31 12:58:19" 
+
+ } 
+
+ ] 
+
+ }, 
+
+ "QUERY_STRING": { 
+
+ "S": "select sellername, buyername, eventid, dateid, qtysold, pricepaid, commission, saletime from 
+dbo.sales where " 
+
+ } 
+
+} 
+
+ 
+
+3. NT_Accelerate_JOB_LOG table 
+- Keep log history of jobs. Help user to identify the job status as well as number of records 
+from source to destination. In addition, it records job duration as well 
+
+
+NT_Accelerate_JOB_LOG 
+
+Column Name 
+
+Data Type 
+
+Description 
+
+ID 
+
+STRING 
+
+Primary key 
+
+BATCH_ID 
+
+INT 
+
+Batch id 
+
+JOB_NAME 
+
+STRING 
+
+Job’s name 
+
+RUN_DATE 
+
+STRING 
+
+Run date 
+
+PROCESS_STATUS 
+
+STRING 
+
+Store job’s status: FAILED or SUCCEEDED 
+
+ERROR_MSG 
+
+STRING 
+
+Store error message if job fails 
+
+START_RUN 
+
+STRING 
+
+Time that job starts running 
+
+END_RUN 
+
+STRING 
+
+Time that Job finishes 
+
+
+
+
+SOURCE_COUNT 
+
+INT 
+
+Number of records from source 
+
+TARGET_COUNT 
+
+INT 
+
+Number of records from destination 
+
+
+
+ 
+
+4. NT_Accelerate_JOB_STATUS table 
+- Recording job’s status after they finished. This information is used to send mail after 
+master job completes or to identify which jobs failed and then rerun 
+- This table will be truncated every running master job with status = NEW 
+
+
+NT_Accelerate_JOB_STATUS 
+
+Column Name 
+
+Data Type 
+
+Description 
+
+JOB_NAME 
+
+STRING 
+
+Job’s name 
+
+BATCH_ID 
+
+INT 
+
+Batch id 
+
+ERROR_MSG 
+
+STRING 
+
+Store error message if job fails 
+
+PROCESS_STATUS 
+
+STRING 
+
+Store job’s status: FAILED or SUCCEEDED 
+
+RUN_DATE 
+
+STRING 
+
+Run date 
+
+
+
+ 
+
+5. AWS Secret manager 
+- This service is used to keep credential for source database. To store RDS information, go 
+to AWS Secret Manger -> Click Store a new secret -.> Select Other type of secret -> Input 
+Key/value pairs as below 
+
+
+ 
+
+- Save Secret name is “SQLSource_Database_Connection_Info” (Note: this name is used in 
+aws glue later) 
+
+
+ 
+
+6. Modify Job 
+- In Job Details -> Library-> Add path 
+
+
+◼ Libraries 
+
+Python library path: s3://ntaccelerate/library/Genericlib.zip 
+
+- Go back Glue script, remove comments and run again 
+- Check JOB_LOG and JOB_STATUS in dynamodb 
+
+
+
+ 
+
+III. Implement the rest of jobs 
+
+
+ 
+
+Job Name 
+
+Functionality 
+
+jb_Stg_Extract_Event 
+
+Extract data from Event table 
+
+jb_Stg_Extract_Users 
+
+Extract data from Users table 
+
+jb_Stg_Extract_Venue 
+
+Extract data from Venue table 
+
+jb_Stg_Extract_Sales 
+
+Extract data from Sales table 
+
+
+
+ 
+
+
+DAY 2: BUILD MASTER JOB TO INTEGRATE CHILD JOBS TOGETHER 
+
+NT_Accelarate_LambdaRole
+I. Preparation 
+1.1. Create Create lambda role 
+
+
+- Go to IAM -> Roles -> Create role -> Add permissions -> Include some policies as below 
+
+
+ 
+
+” - Save role with name “
+
+
+NT_Accelerate_StepFunctionRole
+1.2. Create StepFunction role 
+
+
+- Go to IAM -> Roles -> Create role -> Add permissions -> Include some policies as below 
+
+
+” - Save role with name “
+
+
+ 
+
+1.3. Create Email in SES Service 
+
+
+- In AWS, select AWS Simple Email Service -> Verified identities -> Create identity -> Email 
+address. Input Email address as below 
+
+
+ 
+
+ 
+
+ 
+
+- Repeat for Sender and Receivers 
+
+
+ 
+
+
+1.4. Add more tables in DynamoDB 
+1.4.1. NT_Accelerate_MASTER_JOB_CONFIG table 
+
+
+
+
+- Used to configure for master jobs 
+
+
+NT_Accelerate_MASTER_JOB_CONFIG 
+
+Column Name 
+
+Data Type 
+
+Description 
+
+ID 
+
+INT 
+
+Primary key. These values are used in step 
+function later 
+
+BATCH_ID 
+
+INT 
+
+To identify after each process. Batch ID will be 
+increased +1 after each running with 
+RUNTYPE = New 
+
+LAST_RUN_DATE 
+
+STRING 
+
+The last day that master job runs 
+
+LAST_RUN_STATUS 
+
+STRING 
+
+The last status that master job runs 
+
+MASTER_JOB_NAME 
+
+STRING 
+
+Additional information, to distinguish 
+between master jobs 
+
+RUN_TYPE 
+
+STRING 
+
+Including 2 values 
+
+- NEW: when no failed in previous run. 
+Usually daily run 
+- RERUN: job failed and need to run again 
+
+
+RERUN_DATE 
+
+STRING 
+
+MUST HAVE when RERUN. 
+
+
+
+ Sample data 
+
+{ 
+
+ "ID": { 
+
+ "N": "1" 
+
+ }, 
+
+ "BATCH_ID": { 
+
+ "N": "32" 
+
+ }, 
+
+ "LAST_RUN_DATE": { 
+
+ "S": "2022-11-15" 
+
+ }, 
+
+ "LAST_RUN_STATUS": { 
+
+ "S": "SUCCEEDED" 
+
+ }, 
+
+ "MASTER_JOB_NAME": { 
+
+ "S": "NT_Accelerate_Datalake_Master_Job" 
+
+ }, 
+
+ "RERUN_DATE": { 
+
+ "S": "2022-09-22" 
+
+ }, 
+
+ "RUN_TYPE": { 
+
+ "S": "NEW" 
+
+ } 
+
+} 
+
+ 
+
+1.4.2. NT_Accelerate_MAIL_CONFIG table 
+
+
+
+
+- Used to configure sender and receiver email after master job finished 
+
+
+
+NT_Accelerate_MAIL_CONFIG 
+
+Column Name 
+
+Data Type 
+
+Description 
+
+ID 
+
+INT 
+
+Primary key 
+
+RECEIVER 
+
+LIST 
+
+List of receiver’s email 
+
+SENDER 
+
+STRING 
+
+Sender’s email 
+
+
+
+ 
+
+ Sample data 
+
+ { 
+
+ "ID": { 
+
+ "S": "1" 
+
+ }, 
+
+ "RECEIVER": { 
+
+ "L": [ 
+
+ { 
+
+ "S": "long.hoang@nashtechglobal.com" 
+
+ } 
+
+ ] 
+
+ }, 
+
+ "SENDER": { 
+
+ "S": "ntdatateam@gmail.com" 
+
+ } 
+
+} 
+
+II. Create lambda functions 
+- Lambda functions are used in workflow to control jobs. To create lambda function, go to 
+Lambda -> Create function -> Author from scratch -> Select Python as Runtime -> Select 
+NT_Accelerate_LambdaRole) as below 
+
+
+ 
+
+
+ 
+
+Create lambda functions as below 
+
+❖ Note: these functions are located in folder /lambda/ 
+
+ 
+
+Lambda function 
+
+Functionality 
+
+NT_Accelerate_Read_Run_Type 
+
+Get master job’s run type. Either NEW 
+or RERUN 
+
+NT_Accelerate_Check_Job_Status 
+
+This function checks table 
+NT_Accelerate_JOB_STATUS to see if 
+exist Failed job in it or not. In the case 
+exsitinng (return False), we can not 
+continue running with LOAD_TYPE = 
+NEW 
+
+NT_Accelerate_Truncate_Job_Status 
+
+Truncate table 
+NT_Accelerate_JOB_STATUS in 
+DynamoDB 
+
+NT_Accelerate_Is_Allow_Running 
+
+This function checks if job ran in that 
+day? 
+
+If it is single run and ran successfully 
+then STOP 
+
+Otherwise allow running 
+
+NT_Accelerate_Update_Job_Status 
+
+Update status into table 
+NT_Accelerate_JOB_STATUS if job ran 
+successfully. This function is used 
+when run_type = RERUN 
+
+
+
+
+NT_Accelerate_Update_MasterJob_Status 
+
+Update status (SUCCEEDED or FAILED) 
+into 
+NT_Accelerate_MASTER_JOB_CONFIG 
+table in DynamoDB 
+
+NT_Accelerate_Send_Mail 
+
+Send mail to user 
+
+NT_Accelerate_Check_Staging_Master_Job_Status 
+
+This function is to check if staging 
+master job (from source to data lake) 
+ran successfully in day 
+
+NT_Accelerate_Check_Job_ReRun 
+
+This function is to check if Job reruns? 
+
+A job reruns when it runs failed or not 
+running in previous run 
+
+
+
+ 
+
+III. Create master job NT_Accelerate_Datalake_Master_Job 
+- This master job is workflow which ingests data from data sources to data lake 
+- In AWS, go to Step Functions -> State machines -> Click Create state machine button -> 
+Standard -> Next until Step 3 Review generated code as below 
+- 
+
+
+
+ 
+
+ 
+
+- Copy script Edit NT_Accelerate_Datalake_Master_Job.json in folder /step_function/ into 
+Definition as below 
+
+
+ 
+
+- Click Next and naming for state machine “NT_Accelerate_Datalake_Master_Job” 
+- In Permissions, click “Choose an existing role” and select role 
+“NT_Accelerate_StepFunction” as below 
+
+
+ 
+
+ 
+
+ 
+
+- Click “Create state machine” to finish 
+
+
+
+ 
+
+ 
+
+
