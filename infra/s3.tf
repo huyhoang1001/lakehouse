@@ -138,3 +138,28 @@ resource "aws_s3_object" "raw_xml" {
 
   depends_on = [aws_s3_bucket.main]
 }
+
+# -----------------------------------------------------------------------------
+# task 2.6 — Zero-byte prefix objects
+# -----------------------------------------------------------------------------
+
+resource "aws_s3_object" "prefix_lake" {
+  bucket     = aws_s3_bucket.main.id
+  key        = "lake/bronze/tickit/"
+  content    = ""
+  depends_on = [aws_s3_bucket.main]
+}
+
+resource "aws_s3_object" "prefix_spark_history_logs" {
+  bucket     = aws_s3_bucket.main.id
+  key        = "sparkHistoryLogs/"
+  content    = ""
+  depends_on = [aws_s3_bucket.main]
+}
+
+resource "aws_s3_object" "prefix_temporary" {
+  bucket     = aws_s3_bucket.main.id
+  key        = "temporary/"
+  content    = ""
+  depends_on = [aws_s3_bucket.main]
+}
