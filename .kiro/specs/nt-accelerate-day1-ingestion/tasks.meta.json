@@ -482,6 +482,16 @@
         "executionId": "4eafccea-22bb-43d1-a624-bf78930653cc",
         "chatSessionId": "sess_82dfe3b7-875b-4bba-bc02-ad5e8fec018a",
         "timestamp": 1794807768464
+      },
+      {
+        "executionId": "586c0ca6-9249-4979-96d1-4b65be65cc43",
+        "chatSessionId": "sess_82dfe3b7-875b-4bba-bc02-ad5e8fec018a",
+        "timestamp": 1794809249743
+      },
+      {
+        "executionId": "586c0ca6-9249-4979-96d1-4b65be65cc43",
+        "chatSessionId": "sess_82dfe3b7-875b-4bba-bc02-ad5e8fec018a",
+        "timestamp": 1794809316072
       }
     ],
     "9.2 Create `aws_glue_job` `jb_Stg_Extract_Date` (full load) (depends 9.1 patterns)": [
@@ -489,6 +499,26 @@
         "executionId": "4eafccea-22bb-43d1-a624-bf78930653cc",
         "chatSessionId": "sess_82dfe3b7-875b-4bba-bc02-ad5e8fec018a",
         "timestamp": 1794807768487
+      },
+      {
+        "executionId": "586c0ca6-9249-4979-96d1-4b65be65cc43",
+        "chatSessionId": "sess_82dfe3b7-875b-4bba-bc02-ad5e8fec018a",
+        "timestamp": 1794809321173
+      },
+      {
+        "executionId": "586c0ca6-9249-4979-96d1-4b65be65cc43",
+        "chatSessionId": "sess_82dfe3b7-875b-4bba-bc02-ad5e8fec018a",
+        "timestamp": 1794809325858
+      },
+      {
+        "executionId": "fafe32f6-3afe-47f7-90de-667b3c7340b7",
+        "chatSessionId": "sess_82dfe3b7-875b-4bba-bc02-ad5e8fec018a",
+        "timestamp": 1794813097567
+      },
+      {
+        "executionId": "fafe32f6-3afe-47f7-90de-667b3c7340b7",
+        "chatSessionId": "sess_82dfe3b7-875b-4bba-bc02-ad5e8fec018a",
+        "timestamp": 1794813102544
       }
     ],
     "9.3 Create `aws_glue_job` `jb_Stg_Extract_Event` (full load)": [
@@ -496,6 +526,16 @@
         "executionId": "4eafccea-22bb-43d1-a624-bf78930653cc",
         "chatSessionId": "sess_82dfe3b7-875b-4bba-bc02-ad5e8fec018a",
         "timestamp": 1794807768515
+      },
+      {
+        "executionId": "fafe32f6-3afe-47f7-90de-667b3c7340b7",
+        "chatSessionId": "sess_82dfe3b7-875b-4bba-bc02-ad5e8fec018a",
+        "timestamp": 1794813107777
+      },
+      {
+        "executionId": "fafe32f6-3afe-47f7-90de-667b3c7340b7",
+        "chatSessionId": "sess_82dfe3b7-875b-4bba-bc02-ad5e8fec018a",
+        "timestamp": 1794813112834
       }
     ],
     "9.4 Create `aws_glue_job` `jb_Stg_Extract_Listing` (full load)": [
@@ -503,6 +543,16 @@
         "executionId": "4eafccea-22bb-43d1-a624-bf78930653cc",
         "chatSessionId": "sess_82dfe3b7-875b-4bba-bc02-ad5e8fec018a",
         "timestamp": 1794807768539
+      },
+      {
+        "executionId": "fafe32f6-3afe-47f7-90de-667b3c7340b7",
+        "chatSessionId": "sess_82dfe3b7-875b-4bba-bc02-ad5e8fec018a",
+        "timestamp": 1794813117870
+      },
+      {
+        "executionId": "fafe32f6-3afe-47f7-90de-667b3c7340b7",
+        "chatSessionId": "sess_82dfe3b7-875b-4bba-bc02-ad5e8fec018a",
+        "timestamp": 1794813123269
       }
     ],
     "9.5 Create `aws_glue_job` `jb_Stg_Extract_Users` (full load)": [
@@ -510,6 +560,16 @@
         "executionId": "4eafccea-22bb-43d1-a624-bf78930653cc",
         "chatSessionId": "sess_82dfe3b7-875b-4bba-bc02-ad5e8fec018a",
         "timestamp": 1794807768564
+      },
+      {
+        "executionId": "fafe32f6-3afe-47f7-90de-667b3c7340b7",
+        "chatSessionId": "sess_82dfe3b7-875b-4bba-bc02-ad5e8fec018a",
+        "timestamp": 1794813128644
+      },
+      {
+        "executionId": "fafe32f6-3afe-47f7-90de-667b3c7340b7",
+        "chatSessionId": "sess_82dfe3b7-875b-4bba-bc02-ad5e8fec018a",
+        "timestamp": 1794813133802
       }
     ],
     "9.6 Create `aws_glue_job` `jb_Stg_Extract_Venue` (full load)": [
@@ -517,6 +577,16 @@
         "executionId": "4eafccea-22bb-43d1-a624-bf78930653cc",
         "chatSessionId": "sess_82dfe3b7-875b-4bba-bc02-ad5e8fec018a",
         "timestamp": 1794807768584
+      },
+      {
+        "executionId": "fafe32f6-3afe-47f7-90de-667b3c7340b7",
+        "chatSessionId": "sess_82dfe3b7-875b-4bba-bc02-ad5e8fec018a",
+        "timestamp": 1794813138933
+      },
+      {
+        "executionId": "fafe32f6-3afe-47f7-90de-667b3c7340b7",
+        "chatSessionId": "sess_82dfe3b7-875b-4bba-bc02-ad5e8fec018a",
+        "timestamp": 1794813144320
       }
     ],
     "9.7 Create `aws_glue_job` `jb_Stg_Extract_Sales` with `p_is_incremental_load=True` (depends 7.6, 5.2, 8.2)": [
@@ -524,6 +594,16 @@
         "executionId": "4eafccea-22bb-43d1-a624-bf78930653cc",
         "chatSessionId": "sess_82dfe3b7-875b-4bba-bc02-ad5e8fec018a",
         "timestamp": 1794807768615
+      },
+      {
+        "executionId": "fafe32f6-3afe-47f7-90de-667b3c7340b7",
+        "chatSessionId": "sess_82dfe3b7-875b-4bba-bc02-ad5e8fec018a",
+        "timestamp": 1794813150150
+      },
+      {
+        "executionId": "fafe32f6-3afe-47f7-90de-667b3c7340b7",
+        "chatSessionId": "sess_82dfe3b7-875b-4bba-bc02-ad5e8fec018a",
+        "timestamp": 1794813228734
       }
     ],
     "9.8 (optional) Create `aws_glue_job` `jb_Stg_Extract_ExcelFile` gated by `var.enable_flatfile_job` (depends 2.5)": [
@@ -531,6 +611,16 @@
         "executionId": "4eafccea-22bb-43d1-a624-bf78930653cc",
         "chatSessionId": "sess_82dfe3b7-875b-4bba-bc02-ad5e8fec018a",
         "timestamp": 1794807768640
+      },
+      {
+        "executionId": "fafe32f6-3afe-47f7-90de-667b3c7340b7",
+        "chatSessionId": "sess_82dfe3b7-875b-4bba-bc02-ad5e8fec018a",
+        "timestamp": 1794813155681
+      },
+      {
+        "executionId": "fafe32f6-3afe-47f7-90de-667b3c7340b7",
+        "chatSessionId": "sess_82dfe3b7-875b-4bba-bc02-ad5e8fec018a",
+        "timestamp": 1794813233901
       }
     ],
     "10.1 `terraform apply`; capture outputs (depends all §2–§9)": [

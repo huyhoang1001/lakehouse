@@ -9,7 +9,7 @@
 
 output "s3_bucket_name" {
   description = "Name of the S3 bucket holding Glue scripts, libraries, raw samples, bronze-layer Parquet, Spark logs, and temp space."
-  value       = null
+  value       = aws_s3_bucket.main.bucket
 }
 
 output "rds_endpoint" {
@@ -19,7 +19,10 @@ output "rds_endpoint" {
 
 output "glue_job_names" {
   description = "List of all provisioned Glue extraction job names (6 full-load + 1 incremental Sales; excludes the optional flat-file job)."
-  value       = null
+  value = concat(
+    sort(keys(aws_glue_job.full_load)),
+    [aws_glue_job.sales.name]
+  )
 }
 
 output "glue_database_name" {
@@ -39,7 +42,12 @@ output "connection_name" {
 
 output "dynamodb_table_names" {
   description = "Map of logical key to DynamoDB table name (spellings match Genericlib.py exactly, including intentional typos)."
-  value       = null
+  value = {
+    job_config = aws_dynamodb_table.job_config.name
+    job_log    = aws_dynamodb_table.job_log.name
+    job_status = aws_dynamodb_table.job_status.name
+    watermark  = aws_dynamodb_table.watermark.name
+  }
 }
 
 output "secret_arn" {
