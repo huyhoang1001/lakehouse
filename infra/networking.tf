@@ -215,3 +215,46 @@ resource "aws_db_instance" "rds" {
     Name = "${local.project_name}-sqlserver-express"
   })
 }
+
+# ---------------------------------------------------------------------------
+# Pre-destroy ENI cleanup for sg_glue
+# ---------------------------------------------------------------------------
+# Glue creates Elastic Network Interfaces (ENIs) in the connection subnet and
+# attaches them to sg_glue. When a crawler or job terminates abnormally, these
+# ENIs can be left in "available" state. Terraform cannot delete a security
+# group while ENIs still reference it (DependencyViolation).
+#
+# This null_resource runs a destroy-time local-exec that detaches and deletes
+# any lingering ENIs before Terraform attempts to remove sg_glue, so
+# "terraform destroy" succeeds without manual intervention.
+# ---------------------------------------------------------------------------
+
+resource "null_resource" "cleanup_glue_enis" {
+  triggers = {
+    sg_glue_id = aws_security_group.sg_glue.id
+    region     = var.aws_region
+  }
+
+  provisioner "local-exec" {
+    when       = destroy
+    command    = <<-EOT
+      echo "Cleaning up orphaned Glue ENIs attached to ${self.triggers.sg_glue_id}..."
+      ENIS=$(aws ec2 describe-network-interfaces \
+        --region ${self.triggers.region} \
+        --filters Name=group-id,Values=${self.triggers.sg_glue_id} \
+        --query 'NetworkInterfaces[?Status==`available`].NetworkInterfaceId' \
+        --output text 2>/dev/null)
+      if [ -z "$ENIS" ]; then
+        echo "No orphaned ENIs found."
+      else
+        for eni in $ENIS; do
+          echo "Deleting ENI $eni..."
+          aws ec2 delete-network-interface \
+            --network-interface-id "$eni" \
+            --region ${self.triggers.region} 2>&1 && echo "  deleted $eni" || echo "  failed $eni (may already be gone)"
+        done
+      fi
+    EOT
+    interpreter = ["bash", "-c"]
+  }
+}
