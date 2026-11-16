@@ -44,10 +44,10 @@ output "dynamodb_table_names" {
 
 output "secret_arn" {
   description = "ARN of the Secrets Manager secret containing the RDS JDBC connection credentials."
-  value       = null
+  value       = aws_secretsmanager_secret.rds_secret.arn
 }
 
 output "secret_name" {
   description = "Name of the Secrets Manager secret (SQLSource_Database_Connection_Info)."
-  value       = null
+  value       = aws_secretsmanager_secret.rds_secret.name
 }

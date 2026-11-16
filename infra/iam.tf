@@ -85,7 +85,7 @@ resource "aws_iam_role_policy" "glue_scoped" {
           "secretsmanager:GetSecretValue",
         ]
         Resource = [
-          "arn:aws:secretsmanager:${var.aws_region}:${data.aws_caller_identity.current.account_id}:secret:${local.secret_name}*",
+          "${aws_secretsmanager_secret.rds_secret.arn}*",
         ]
       },
       {
