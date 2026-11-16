@@ -5,8 +5,8 @@ Implementation tasks for the spec `nt-accelerate-day1-ingestion`. Numbering foll
 ## 1. Project scaffolding (refs Req 1–12)
 - [x] 1.1 Create `infra/` layout: `versions.tf`, `variables.tf`, `locals.tf`, `providers.tf`
 - [x] 1.2 Pin AWS provider `~> 5.0`, region `us-east-1`; configure from `AWS_*` env / shared credentials
-- [ ] 1.3 Define `variables.tf` (bucket_name, db creds, run_date, batch_id, enable_flatfile_job, source_artifacts_dir, tags) per design Interfaces
-- [ ] 1.4 Define `outputs.tf` placeholders (bucket, rds_endpoint, job names, table names, secret)
+- [x] 1.3 Define `variables.tf` (bucket_name, db creds, run_date, batch_id, enable_flatfile_job, source_artifacts_dir, tags) per design Interfaces
+- [x] 1.4 Define `outputs.tf` placeholders (bucket, rds_endpoint, job names, table names, secret)
 
 ## 2. S3 bucket and artifact uploads (refs Req 1)
 - [ ] 2.1 `aws_s3_bucket` with `var.bucket_name` (depends 1.1)
