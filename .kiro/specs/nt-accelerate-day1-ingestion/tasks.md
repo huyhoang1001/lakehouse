@@ -12,7 +12,7 @@ Implementation tasks for the spec `nt-accelerate-day1-ingestion`. Numbering foll
 - [x] 2.1 `aws_s3_bucket` with `var.bucket_name` (depends 1.1)
 - [x] 2.2 Enable versioning, block public access, SSE-S3 encryption
 - [x] 2.3 Upload the 8 Glue `.py` scripts to `glue_script/` via `aws_s3_object` (source = `source_artifacts_dir`)
-- [ ] 2.4 Zip `Genericlib.py` into `Genericlib.zip` (`archive_file`) and upload to `library/` with `openpyxl-3.0.10.tar.gz`
+- [x] 2.4 Zip `Genericlib.py` into `Genericlib.zip` (`archive_file`) and upload to `library/` with `openpyxl-3.0.10.tar.gz`
 - [ ] 2.5 Upload raw samples (csv/xlsx/json/xml) to `raw/<type>/` (depends 2.1)
 - [ ] 2.6 Create zero-byte prefix objects: `lake/bronze/tickit/`, `sparkHistoryLogs/`, `temporary/`
 

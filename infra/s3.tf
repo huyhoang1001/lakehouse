@@ -70,3 +70,31 @@ resource "aws_s3_object" "glue_scripts" {
 
   depends_on = [aws_s3_bucket.main]
 }
+
+# -----------------------------------------------------------------------------
+# task 2.4 — Zip Genericlib.py and upload both library files to library/
+# -----------------------------------------------------------------------------
+
+data "archive_file" "genericlib" {
+  type        = "zip"
+  source_file = "${var.source_artifacts_dir}/Day 1 source 3/Day 1 source/S3/library/Genericlib/Genericlib.py"
+  output_path = "${path.module}/../tmp/Genericlib.zip"
+}
+
+resource "aws_s3_object" "genericlib_zip" {
+  bucket = aws_s3_bucket.main.id
+  key    = "library/Genericlib.zip"
+  source = data.archive_file.genericlib.output_path
+  etag   = data.archive_file.genericlib.output_md5
+
+  depends_on = [aws_s3_bucket.main]
+}
+
+resource "aws_s3_object" "openpyxl" {
+  bucket = aws_s3_bucket.main.id
+  key    = "library/openpyxl-3.0.10.tar.gz"
+  source = "${var.source_artifacts_dir}/Day 1 source 3/Day 1 source/S3/library/openpyxl-3.0.10.tar.gz"
+  etag   = filemd5("${var.source_artifacts_dir}/Day 1 source 3/Day 1 source/S3/library/openpyxl-3.0.10.tar.gz")
+
+  depends_on = [aws_s3_bucket.main]
+}

@@ -17,6 +17,9 @@ crash.*.log
 # Sensitive plan files
 *.tfplan
 
+# Generated archives
+tmp/*.zip
+
 # OS/editor
 .DS_Store
 Thumbs.db
