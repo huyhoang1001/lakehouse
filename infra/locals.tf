@@ -25,10 +25,10 @@ locals {
   crawler_name         = "NT_Accelerate_cwl_RDSTickit"
 
   # DynamoDB control tables — exact spellings matching Genericlib.py (typos intentional)
-  ddb_job_config = "NT_Accelerate_JOB_CONFIG"        # correct spelling
-  ddb_job_log    = "NT_Accelerate_JOB_LOG"           # correct spelling
-  ddb_job_status = "NT_Accelarate_JOB_STATUS"        # missing 'e' in Accelerate (intentional)
-  ddb_watermark  = "NT_Acccelarate_WATERMARKTABLE"    # triple 'c', missing 'e' (intentional)
+  ddb_job_config = "NT_Accelerate_JOB_CONFIG"      # correct spelling
+  ddb_job_log    = "NT_Accelerate_JOB_LOG"         # correct spelling
+  ddb_job_status = "NT_Accelarate_JOB_STATUS"      # missing 'e' in Accelerate (intentional)
+  ddb_watermark  = "NT_Acccelarate_WATERMARKTABLE" # triple 'c', missing 'e' (intentional)
 
   # S3 key prefixes
   s3_glue_script_prefix = "glue_script/"

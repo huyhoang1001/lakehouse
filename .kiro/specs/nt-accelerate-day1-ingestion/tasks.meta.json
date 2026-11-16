@@ -48,6 +48,42 @@
         "chatSessionId": "sess_d0b521be-4523-46e7-8765-1544bc3464a5",
         "timestamp": 1794805584729
       }
+    ],
+    "2.1 `aws_s3_bucket` with `var.bucket_name` (depends 1.1)": [
+      {
+        "executionId": "e3510523-d5bf-4435-96a4-c19685e43767",
+        "chatSessionId": "sess_55cd4c2f-2214-40d7-be31-74aaed8e27f2",
+        "timestamp": 1794805906027
+      },
+      {
+        "executionId": "e3510523-d5bf-4435-96a4-c19685e43767",
+        "chatSessionId": "sess_55cd4c2f-2214-40d7-be31-74aaed8e27f2",
+        "timestamp": 1794805941244
+      }
+    ],
+    "2.2 Enable versioning, block public access, SSE-S3 encryption": [
+      {
+        "executionId": "a38cd35d-62e7-4fa9-9372-b344fc900c06",
+        "chatSessionId": "sess_5b1274fc-8584-428f-8595-73ac9e5eeeed",
+        "timestamp": 1794805981186
+      },
+      {
+        "executionId": "a38cd35d-62e7-4fa9-9372-b344fc900c06",
+        "chatSessionId": "sess_5b1274fc-8584-428f-8595-73ac9e5eeeed",
+        "timestamp": 1794806027048
+      }
+    ],
+    "2.3 Upload the 8 Glue `.py` scripts to `glue_script/` via `aws_s3_object` (source = `source_artifacts_dir`)": [
+      {
+        "executionId": "4512b2d4-c3c8-4e3b-b85a-c9e0df8c0ed0",
+        "chatSessionId": "sess_5931bfa3-129d-48b4-bb87-a4cd02a7b7c3",
+        "timestamp": 1794806581259
+      },
+      {
+        "executionId": "4512b2d4-c3c8-4e3b-b85a-c9e0df8c0ed0",
+        "chatSessionId": "sess_5931bfa3-129d-48b4-bb87-a4cd02a7b7c3",
+        "timestamp": 1794806637995
+      }
     ]
   }
 }
