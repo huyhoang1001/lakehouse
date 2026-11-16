@@ -98,3 +98,43 @@ resource "aws_s3_object" "openpyxl" {
 
   depends_on = [aws_s3_bucket.main]
 }
+
+# -----------------------------------------------------------------------------
+# task 2.5 — Upload raw sample files to raw/<type>/
+# -----------------------------------------------------------------------------
+
+resource "aws_s3_object" "raw_csv" {
+  bucket = aws_s3_bucket.main.id
+  key    = "raw/csv/SalesEvent.csv"
+  source = "${var.source_artifacts_dir}/Day 1 source 3/Day 1 source/S3/raw/csv/SalesEvent.csv"
+  etag   = filemd5("${var.source_artifacts_dir}/Day 1 source 3/Day 1 source/S3/raw/csv/SalesEvent.csv")
+
+  depends_on = [aws_s3_bucket.main]
+}
+
+resource "aws_s3_object" "raw_excel" {
+  bucket = aws_s3_bucket.main.id
+  key    = "raw/excel/SalesEvent.xlsx"
+  source = "${var.source_artifacts_dir}/Day 1 source 3/Day 1 source/S3/raw/excel/SalesEvent.xlsx"
+  etag   = filemd5("${var.source_artifacts_dir}/Day 1 source 3/Day 1 source/S3/raw/excel/SalesEvent.xlsx")
+
+  depends_on = [aws_s3_bucket.main]
+}
+
+resource "aws_s3_object" "raw_json" {
+  bucket = aws_s3_bucket.main.id
+  key    = "raw/json/user.json"
+  source = "${var.source_artifacts_dir}/Day 1 source 3/Day 1 source/S3/raw/json/user.json"
+  etag   = filemd5("${var.source_artifacts_dir}/Day 1 source 3/Day 1 source/S3/raw/json/user.json")
+
+  depends_on = [aws_s3_bucket.main]
+}
+
+resource "aws_s3_object" "raw_xml" {
+  bucket = aws_s3_bucket.main.id
+  key    = "raw/xml/customer.xml"
+  source = "${var.source_artifacts_dir}/Day 1 source 3/Day 1 source/S3/raw/xml/customer.xml"
+  etag   = filemd5("${var.source_artifacts_dir}/Day 1 source 3/Day 1 source/S3/raw/xml/customer.xml")
+
+  depends_on = [aws_s3_bucket.main]
+}
