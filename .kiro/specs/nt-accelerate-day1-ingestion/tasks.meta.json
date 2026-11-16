@@ -156,6 +156,54 @@
         "chatSessionId": "sess_4ec404a2-bd3a-4fe1-80f1-dc24fe58091d",
         "timestamp": 1794807284914
       }
+    ],
+    "4.1 Data-source default VPC + subnets; create `aws_security_group` `sg_rds` and `sg_glue` (depends 1.1)": [
+      {
+        "executionId": "5f1c4ccd-67d3-479b-a3be-30ecf35ef661",
+        "chatSessionId": "sess_5180bcb6-9103-4871-ab8f-06ce3d5d4517",
+        "timestamp": 1794807353110
+      },
+      {
+        "executionId": "5f1c4ccd-67d3-479b-a3be-30ecf35ef661",
+        "chatSessionId": "sess_5180bcb6-9103-4871-ab8f-06ce3d5d4517",
+        "timestamp": 1794807399955
+      }
+    ],
+    "4.2 RDS SG ingress rule: TCP 1433 from `sg_glue`": [
+      {
+        "executionId": "67489438-8281-4ad0-9dd5-0239009d1d9c",
+        "chatSessionId": "sess_4829be97-22b4-4810-b87c-63f09718e900",
+        "timestamp": 1794807431368
+      },
+      {
+        "executionId": "67489438-8281-4ad0-9dd5-0239009d1d9c",
+        "chatSessionId": "sess_4829be97-22b4-4810-b87c-63f09718e900",
+        "timestamp": 1794807479821
+      }
+    ],
+    "4.3 `aws_db_subnet_group` using default subnets": [
+      {
+        "executionId": "76483ec6-a2f4-41ba-b9a6-0cc4e24c2630",
+        "chatSessionId": "sess_79607178-6d99-48bc-ab5e-5fe1a08204c1",
+        "timestamp": 1794807547330
+      },
+      {
+        "executionId": "76483ec6-a2f4-41ba-b9a6-0cc4e24c2630",
+        "chatSessionId": "sess_79607178-6d99-48bc-ab5e-5fe1a08204c1",
+        "timestamp": 1794807585194
+      }
+    ],
+    "4.4 `aws_db_instance`: engine `sqlserver-ex`, `db.t3.micro`, 20 GB gp2, publicly accessible, creds from vars, `sg_rds` (depends 4.1, 4.3)": [
+      {
+        "executionId": "2c6698ed-9b07-4851-a1d5-9eeaf369c96c",
+        "chatSessionId": "sess_82dfe3b7-875b-4bba-bc02-ad5e8fec018a",
+        "timestamp": 1794807638632
+      },
+      {
+        "executionId": "2c6698ed-9b07-4851-a1d5-9eeaf369c96c",
+        "chatSessionId": "sess_82dfe3b7-875b-4bba-bc02-ad5e8fec018a",
+        "timestamp": 1794807696764
+      }
     ]
   }
 }

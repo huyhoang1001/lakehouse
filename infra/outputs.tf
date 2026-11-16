@@ -14,7 +14,7 @@ output "s3_bucket_name" {
 
 output "rds_endpoint" {
   description = "JDBC URL of the RDS SQL Server Express instance: jdbc:sqlserver://<endpoint>:1433;databaseName=tickit"
-  value       = null
+  value       = "jdbc:sqlserver://${aws_db_instance.rds.address}:1433;databaseName=tickit"
 }
 
 output "glue_job_names" {

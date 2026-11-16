@@ -22,10 +22,10 @@ Implementation tasks for the spec `nt-accelerate-day1-ingestion`. Numbering foll
 - [x] 3.3 Inline `aws_iam_role_policy`: S3 on `var.bucket_name` only, DynamoDB on the 4 table ARNs only, `secretsmanager:GetSecretValue` on the secret ARN (created in §5 — use the planned ARN), CloudWatch Logs
 
 ## 4. Networking and RDS (refs Req 3)
-- [ ] 4.1 Data-source default VPC + subnets; create `aws_security_group` `sg_rds` and `sg_glue` (depends 1.1)
-- [ ] 4.2 RDS SG ingress rule: TCP 1433 from `sg_glue`
-- [ ] 4.3 `aws_db_subnet_group` using default subnets
-- [ ] 4.4 `aws_db_instance`: engine `sqlserver-ex`, `db.t3.micro`, 20 GB gp2, publicly accessible, creds from vars, `sg_rds` (depends 4.1, 4.3)
+- [x] 4.1 Data-source default VPC + subnets; create `aws_security_group` `sg_rds` and `sg_glue` (depends 1.1)
+- [x] 4.2 RDS SG ingress rule: TCP 1433 from `sg_glue`
+- [x] 4.3 `aws_db_subnet_group` using default subnets
+- [x] 4.4 `aws_db_instance`: engine `sqlserver-ex`, `db.t3.micro`, 20 GB gp2, publicly accessible, creds from vars, `sg_rds` (depends 4.1, 4.3)
 
 ## 5. Secrets Manager (refs Req 5)
 - [ ] 5.1 `aws_secretsmanager_secret` `SQLSource_Database_Connection_Info` (depends 4.4)
