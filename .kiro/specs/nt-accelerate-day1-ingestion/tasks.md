@@ -38,13 +38,13 @@ Implementation tasks for the spec `nt-accelerate-day1-ingestion`. Numbering foll
 - [x] 6.3 Document the `sqlcmd` prerequisite (SQL Server tools) in a README (optional)
 
 ## 7. DynamoDB control tables (refs Req 6)
-- [~] 7.1 Create `NT_Accelerate_JOB_CONFIG` (PK `ID` N) — exact name (depends 1.1)
-- [~] 7.2 Create `NT_Accelerate_JOB_LOG` (PK `ID` S)
-- [~] 7.3 Create `NT_Accelarate_JOB_STATUS` (PK `JOB_NAME` S) — note spelling
-- [~] 7.4 Create `NT_Acccelarate_WATERMARKTABLE` (PK `ID` N, SK `JOB_NAME` S) — note spelling
-- [~] 7.5 Seed `JOB_CONFIG` rows (one per job) via `aws_dynamodb_table_item` or `null_resource` `aws dynamodb put-item`
-- [~] 7.6 Seed Sales `WATERMARKTABLE` row (saletime, `2008-12-31 12:58:19`, QUERY_STRING) (depends 7.4)
-- [~] 7.7 Reference the 4 table ARNs in the Glue role policy from §3.3
+- [x] 7.1 Create `NT_Accelerate_JOB_CONFIG` (PK `ID` N) — exact name (depends 1.1)
+- [x] 7.2 Create `NT_Accelerate_JOB_LOG` (PK `ID` S)
+- [x] 7.3 Create `NT_Accelarate_JOB_STATUS` (PK `JOB_NAME` S) — note spelling
+- [x] 7.4 Create `NT_Acccelarate_WATERMARKTABLE` (PK `ID` N, SK `JOB_NAME` S) — note spelling
+- [x] 7.5 Seed `JOB_CONFIG` rows (one per job) via `aws_dynamodb_table_item` or `null_resource` `aws dynamodb put-item`
+- [x] 7.6 Seed Sales `WATERMARKTABLE` row (saletime, `2008-12-31 12:58:19`, QUERY_STRING) (depends 7.4)
+- [x] 7.7 Reference the 4 table ARNs in the Glue role policy from §3.3
 
 ## 8. Glue catalog, connection, crawler (refs Req 7)
 - [~] 8.1 `aws_glue_catalog_database` `tickit` (depends 3.1)

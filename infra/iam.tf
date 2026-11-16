@@ -72,10 +72,10 @@ resource "aws_iam_role_policy" "glue_scoped" {
           "dynamodb:Scan",
         ]
         Resource = [
-          "arn:aws:dynamodb:${var.aws_region}:${data.aws_caller_identity.current.account_id}:table/${local.ddb_job_config}",
-          "arn:aws:dynamodb:${var.aws_region}:${data.aws_caller_identity.current.account_id}:table/${local.ddb_job_log}",
-          "arn:aws:dynamodb:${var.aws_region}:${data.aws_caller_identity.current.account_id}:table/${local.ddb_job_status}",
-          "arn:aws:dynamodb:${var.aws_region}:${data.aws_caller_identity.current.account_id}:table/${local.ddb_watermark}",
+          aws_dynamodb_table.job_config.arn,
+          aws_dynamodb_table.job_log.arn,
+          aws_dynamodb_table.job_status.arn,
+          aws_dynamodb_table.watermark.arn,
         ]
       },
       {

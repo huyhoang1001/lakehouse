@@ -312,6 +312,16 @@
         "executionId": "4eafccea-22bb-43d1-a624-bf78930653cc",
         "chatSessionId": "sess_82dfe3b7-875b-4bba-bc02-ad5e8fec018a",
         "timestamp": 1794807768173
+      },
+      {
+        "executionId": "db5a8f45-f1b8-4319-9f9c-39348607399b",
+        "chatSessionId": "sess_82dfe3b7-875b-4bba-bc02-ad5e8fec018a",
+        "timestamp": 1794808173569
+      },
+      {
+        "executionId": "db5a8f45-f1b8-4319-9f9c-39348607399b",
+        "chatSessionId": "sess_82dfe3b7-875b-4bba-bc02-ad5e8fec018a",
+        "timestamp": 1794808234798
       }
     ],
     "7.2 Create `NT_Accelerate_JOB_LOG` (PK `ID` S)": [
@@ -319,6 +329,16 @@
         "executionId": "4eafccea-22bb-43d1-a624-bf78930653cc",
         "chatSessionId": "sess_82dfe3b7-875b-4bba-bc02-ad5e8fec018a",
         "timestamp": 1794807768200
+      },
+      {
+        "executionId": "db5a8f45-f1b8-4319-9f9c-39348607399b",
+        "chatSessionId": "sess_82dfe3b7-875b-4bba-bc02-ad5e8fec018a",
+        "timestamp": 1794808178023
+      },
+      {
+        "executionId": "db5a8f45-f1b8-4319-9f9c-39348607399b",
+        "chatSessionId": "sess_82dfe3b7-875b-4bba-bc02-ad5e8fec018a",
+        "timestamp": 1794808239152
       }
     ],
     "7.3 Create `NT_Accelarate_JOB_STATUS` (PK `JOB_NAME` S) — note spelling": [
@@ -326,6 +346,16 @@
         "executionId": "4eafccea-22bb-43d1-a624-bf78930653cc",
         "chatSessionId": "sess_82dfe3b7-875b-4bba-bc02-ad5e8fec018a",
         "timestamp": 1794807768226
+      },
+      {
+        "executionId": "db5a8f45-f1b8-4319-9f9c-39348607399b",
+        "chatSessionId": "sess_82dfe3b7-875b-4bba-bc02-ad5e8fec018a",
+        "timestamp": 1794808182561
+      },
+      {
+        "executionId": "db5a8f45-f1b8-4319-9f9c-39348607399b",
+        "chatSessionId": "sess_82dfe3b7-875b-4bba-bc02-ad5e8fec018a",
+        "timestamp": 1794808243883
       }
     ],
     "7.4 Create `NT_Acccelarate_WATERMARKTABLE` (PK `ID` N, SK `JOB_NAME` S) — note spelling": [
@@ -333,6 +363,16 @@
         "executionId": "4eafccea-22bb-43d1-a624-bf78930653cc",
         "chatSessionId": "sess_82dfe3b7-875b-4bba-bc02-ad5e8fec018a",
         "timestamp": 1794807768259
+      },
+      {
+        "executionId": "db5a8f45-f1b8-4319-9f9c-39348607399b",
+        "chatSessionId": "sess_82dfe3b7-875b-4bba-bc02-ad5e8fec018a",
+        "timestamp": 1794808187657
+      },
+      {
+        "executionId": "db5a8f45-f1b8-4319-9f9c-39348607399b",
+        "chatSessionId": "sess_82dfe3b7-875b-4bba-bc02-ad5e8fec018a",
+        "timestamp": 1794808248485
       }
     ],
     "7.5 Seed `JOB_CONFIG` rows (one per job) via `aws_dynamodb_table_item` or `null_resource` `aws dynamodb put-item`": [
@@ -340,6 +380,16 @@
         "executionId": "4eafccea-22bb-43d1-a624-bf78930653cc",
         "chatSessionId": "sess_82dfe3b7-875b-4bba-bc02-ad5e8fec018a",
         "timestamp": 1794807768308
+      },
+      {
+        "executionId": "db5a8f45-f1b8-4319-9f9c-39348607399b",
+        "chatSessionId": "sess_82dfe3b7-875b-4bba-bc02-ad5e8fec018a",
+        "timestamp": 1794808279541
+      },
+      {
+        "executionId": "db5a8f45-f1b8-4319-9f9c-39348607399b",
+        "chatSessionId": "sess_82dfe3b7-875b-4bba-bc02-ad5e8fec018a",
+        "timestamp": 1794808345060
       }
     ],
     "7.6 Seed Sales `WATERMARKTABLE` row (saletime, `2008-12-31 12:58:19`, QUERY_STRING) (depends 7.4)": [
@@ -347,6 +397,16 @@
         "executionId": "4eafccea-22bb-43d1-a624-bf78930653cc",
         "chatSessionId": "sess_82dfe3b7-875b-4bba-bc02-ad5e8fec018a",
         "timestamp": 1794807768333
+      },
+      {
+        "executionId": "db5a8f45-f1b8-4319-9f9c-39348607399b",
+        "chatSessionId": "sess_82dfe3b7-875b-4bba-bc02-ad5e8fec018a",
+        "timestamp": 1794808958278
+      },
+      {
+        "executionId": "db5a8f45-f1b8-4319-9f9c-39348607399b",
+        "chatSessionId": "sess_82dfe3b7-875b-4bba-bc02-ad5e8fec018a",
+        "timestamp": 1794809025659
       }
     ],
     "7.7 Reference the 4 table ARNs in the Glue role policy from §3.3": [
@@ -354,6 +414,16 @@
         "executionId": "4eafccea-22bb-43d1-a624-bf78930653cc",
         "chatSessionId": "sess_82dfe3b7-875b-4bba-bc02-ad5e8fec018a",
         "timestamp": 1794807768359
+      },
+      {
+        "executionId": "db5a8f45-f1b8-4319-9f9c-39348607399b",
+        "chatSessionId": "sess_82dfe3b7-875b-4bba-bc02-ad5e8fec018a",
+        "timestamp": 1794808963410
+      },
+      {
+        "executionId": "db5a8f45-f1b8-4319-9f9c-39348607399b",
+        "chatSessionId": "sess_82dfe3b7-875b-4bba-bc02-ad5e8fec018a",
+        "timestamp": 1794809026412
       }
     ],
     "8.1 `aws_glue_catalog_database` `tickit` (depends 3.1)": [
