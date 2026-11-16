@@ -18,3 +18,5 @@ provider "aws" {
     tags = var.tags
   }
 }
+
+data "aws_caller_identity" "current" {}

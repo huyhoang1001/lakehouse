@@ -96,6 +96,66 @@
         "chatSessionId": "sess_6dd0ae8e-c174-412d-aafc-167d947e6164",
         "timestamp": 1794806836154
       }
+    ],
+    "2.5 Upload raw samples (csv/xlsx/json/xml) to `raw/<type>/` (depends 2.1)": [
+      {
+        "executionId": "0bd422d0-342b-4bba-b087-2fbf899f9306",
+        "chatSessionId": "sess_bd8c57e0-fe9c-44bb-bb53-b4da9d8a58aa",
+        "timestamp": 1794806891389
+      },
+      {
+        "executionId": "0bd422d0-342b-4bba-b087-2fbf899f9306",
+        "chatSessionId": "sess_bd8c57e0-fe9c-44bb-bb53-b4da9d8a58aa",
+        "timestamp": 1794806929735
+      }
+    ],
+    "2.6 Create zero-byte prefix objects: `lake/bronze/tickit/`, `sparkHistoryLogs/`, `temporary/`": [
+      {
+        "executionId": "ccd08551-be19-45bd-add1-e9764c033df2",
+        "chatSessionId": "sess_e15a4aaf-e937-4cad-a859-6d9148ac2385",
+        "timestamp": 1794807000491
+      },
+      {
+        "executionId": "ccd08551-be19-45bd-add1-e9764c033df2",
+        "chatSessionId": "sess_e15a4aaf-e937-4cad-a859-6d9148ac2385",
+        "timestamp": 1794807040139
+      }
+    ],
+    "3.1 `aws_iam_role` `NT_Accelerate_GlueRole` with `glue.amazonaws.com` trust (depends 2.1)": [
+      {
+        "executionId": "7a4e7410-781b-49e1-91c7-7b15fb759bb7",
+        "chatSessionId": "sess_a47ea2f1-afa1-497f-858f-54f2505dd408",
+        "timestamp": 1794807098167
+      },
+      {
+        "executionId": "7a4e7410-781b-49e1-91c7-7b15fb759bb7",
+        "chatSessionId": "sess_a47ea2f1-afa1-497f-858f-54f2505dd408",
+        "timestamp": 1794807138573
+      }
+    ],
+    "3.2 Attach `AWSGlueServiceRole` managed policy": [
+      {
+        "executionId": "54c663dd-70df-47d7-a74d-52bcf92fc883",
+        "chatSessionId": "sess_d95fb9e9-7876-45c5-bdfc-270655da9a99",
+        "timestamp": 1794807161642
+      },
+      {
+        "executionId": "54c663dd-70df-47d7-a74d-52bcf92fc883",
+        "chatSessionId": "sess_d95fb9e9-7876-45c5-bdfc-270655da9a99",
+        "timestamp": 1794807199226
+      }
+    ],
+    "3.3 Inline `aws_iam_role_policy`: S3 on `var.bucket_name` only, DynamoDB on the 4 table ARNs only, `secretsmanager:GetSecretValue` on the secret ARN (created in §5 — use the planned ARN), CloudWatch Logs": [
+      {
+        "executionId": "345d6f19-2bb9-46a0-8eb2-8eac76d261c0",
+        "chatSessionId": "sess_4ec404a2-bd3a-4fe1-80f1-dc24fe58091d",
+        "timestamp": 1794807232687
+      },
+      {
+        "executionId": "345d6f19-2bb9-46a0-8eb2-8eac76d261c0",
+        "chatSessionId": "sess_4ec404a2-bd3a-4fe1-80f1-dc24fe58091d",
+        "timestamp": 1794807284914
+      }
     ]
   }
 }

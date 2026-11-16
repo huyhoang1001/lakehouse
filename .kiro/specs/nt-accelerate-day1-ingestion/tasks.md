@@ -13,13 +13,13 @@ Implementation tasks for the spec `nt-accelerate-day1-ingestion`. Numbering foll
 - [x] 2.2 Enable versioning, block public access, SSE-S3 encryption
 - [x] 2.3 Upload the 8 Glue `.py` scripts to `glue_script/` via `aws_s3_object` (source = `source_artifacts_dir`)
 - [x] 2.4 Zip `Genericlib.py` into `Genericlib.zip` (`archive_file`) and upload to `library/` with `openpyxl-3.0.10.tar.gz`
-- [ ] 2.5 Upload raw samples (csv/xlsx/json/xml) to `raw/<type>/` (depends 2.1)
-- [ ] 2.6 Create zero-byte prefix objects: `lake/bronze/tickit/`, `sparkHistoryLogs/`, `temporary/`
+- [x] 2.5 Upload raw samples (csv/xlsx/json/xml) to `raw/<type>/` (depends 2.1)
+- [x] 2.6 Create zero-byte prefix objects: `lake/bronze/tickit/`, `sparkHistoryLogs/`, `temporary/`
 
 ## 3. IAM Glue role (refs Req 2)
-- [ ] 3.1 `aws_iam_role` `NT_Accelerate_GlueRole` with `glue.amazonaws.com` trust (depends 2.1)
-- [ ] 3.2 Attach `AWSGlueServiceRole` managed policy
-- [ ] 3.3 Inline `aws_iam_role_policy`: S3 on `var.bucket_name` only, DynamoDB on the 4 table ARNs only, `secretsmanager:GetSecretValue` on the secret ARN (created in §5 — use the planned ARN), CloudWatch Logs
+- [x] 3.1 `aws_iam_role` `NT_Accelerate_GlueRole` with `glue.amazonaws.com` trust (depends 2.1)
+- [x] 3.2 Attach `AWSGlueServiceRole` managed policy
+- [x] 3.3 Inline `aws_iam_role_policy`: S3 on `var.bucket_name` only, DynamoDB on the 4 table ARNs only, `secretsmanager:GetSecretValue` on the secret ARN (created in §5 — use the planned ARN), CloudWatch Logs
 
 ## 4. Networking and RDS (refs Req 3)
 - [ ] 4.1 Data-source default VPC + subnets; create `aws_security_group` `sg_rds` and `sg_glue` (depends 1.1)
