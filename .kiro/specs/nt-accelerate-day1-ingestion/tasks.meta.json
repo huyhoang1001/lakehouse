@@ -261,6 +261,16 @@
         "executionId": "4eafccea-22bb-43d1-a624-bf78930653cc",
         "chatSessionId": "sess_82dfe3b7-875b-4bba-bc02-ad5e8fec018a",
         "timestamp": 1794807768097
+      },
+      {
+        "executionId": "73620db0-d5e8-430e-978e-14f54f6a70db",
+        "chatSessionId": "sess_82dfe3b7-875b-4bba-bc02-ad5e8fec018a",
+        "timestamp": 1794807952927
+      },
+      {
+        "executionId": "73620db0-d5e8-430e-978e-14f54f6a70db",
+        "chatSessionId": "sess_82dfe3b7-875b-4bba-bc02-ad5e8fec018a",
+        "timestamp": 1794808014061
       }
     ],
     "6.2 Guard with `triggers = sha256(tickit_script.sql)`; prepend a `sys.tables` existence check so it is idempotent": [
@@ -268,6 +278,16 @@
         "executionId": "4eafccea-22bb-43d1-a624-bf78930653cc",
         "chatSessionId": "sess_82dfe3b7-875b-4bba-bc02-ad5e8fec018a",
         "timestamp": 1794807768122
+      },
+      {
+        "executionId": "73620db0-d5e8-430e-978e-14f54f6a70db",
+        "chatSessionId": "sess_82dfe3b7-875b-4bba-bc02-ad5e8fec018a",
+        "timestamp": 1794808018609
+      },
+      {
+        "executionId": "73620db0-d5e8-430e-978e-14f54f6a70db",
+        "chatSessionId": "sess_82dfe3b7-875b-4bba-bc02-ad5e8fec018a",
+        "timestamp": 1794808024576
       }
     ],
     "6.3 Document the `sqlcmd` prerequisite (SQL Server tools) in a README (optional)": [
@@ -275,6 +295,16 @@
         "executionId": "4eafccea-22bb-43d1-a624-bf78930653cc",
         "chatSessionId": "sess_82dfe3b7-875b-4bba-bc02-ad5e8fec018a",
         "timestamp": 1794807768149
+      },
+      {
+        "executionId": "73620db0-d5e8-430e-978e-14f54f6a70db",
+        "chatSessionId": "sess_82dfe3b7-875b-4bba-bc02-ad5e8fec018a",
+        "timestamp": 1794808029034
+      },
+      {
+        "executionId": "73620db0-d5e8-430e-978e-14f54f6a70db",
+        "chatSessionId": "sess_82dfe3b7-875b-4bba-bc02-ad5e8fec018a",
+        "timestamp": 1794808065766
       }
     ],
     "7.1 Create `NT_Accelerate_JOB_CONFIG` (PK `ID` N) — exact name (depends 1.1)": [

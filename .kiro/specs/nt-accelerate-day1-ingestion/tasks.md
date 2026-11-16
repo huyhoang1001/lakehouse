@@ -33,9 +33,9 @@ Implementation tasks for the spec `nt-accelerate-day1-ingestion`. Numbering foll
 - [x] 5.3 Wire the secret ARN into the Glue role policy from §3.3
 
 ## 6. RDS seeding (refs Req 4)
-- [~] 6.1 `null_resource` `db_seed` with `local-exec`: `sqlcmd -S <endpoint> -U .. -P .. -i tickit_script.sql` (depends 4.4)
-- [~] 6.2 Guard with `triggers = sha256(tickit_script.sql)`; prepend a `sys.tables` existence check so it is idempotent
-- [~] 6.3 Document the `sqlcmd` prerequisite (SQL Server tools) in a README (optional)
+- [x] 6.1 `null_resource` `db_seed` with `local-exec`: `sqlcmd -S <endpoint> -U .. -P .. -i tickit_script.sql` (depends 4.4)
+- [x] 6.2 Guard with `triggers = sha256(tickit_script.sql)`; prepend a `sys.tables` existence check so it is idempotent
+- [x] 6.3 Document the `sqlcmd` prerequisite (SQL Server tools) in a README (optional)
 
 ## 7. DynamoDB control tables (refs Req 6)
 - [~] 7.1 Create `NT_Accelerate_JOB_CONFIG` (PK `ID` N) — exact name (depends 1.1)
