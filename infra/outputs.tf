@@ -24,17 +24,17 @@ output "glue_job_names" {
 
 output "glue_database_name" {
   description = "Name of the Glue Data Catalog database that holds the crawled Tickit tables (tickit_dbo_*)."
-  value       = null
+  value       = aws_glue_catalog_database.tickit.name
 }
 
 output "crawler_name" {
   description = "Name of the Glue crawler that populates the Tickit catalog tables."
-  value       = null
+  value       = aws_glue_crawler.rds_tickit.name
 }
 
 output "connection_name" {
   description = "Name of the Glue JDBC connection used to reach the RDS SQL Server instance."
-  value       = null
+  value       = aws_glue_connection.conRDS_tickit.name
 }
 
 output "dynamodb_table_names" {

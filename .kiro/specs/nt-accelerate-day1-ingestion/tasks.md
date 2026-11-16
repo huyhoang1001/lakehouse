@@ -47,9 +47,9 @@ Implementation tasks for the spec `nt-accelerate-day1-ingestion`. Numbering foll
 - [x] 7.7 Reference the 4 table ARNs in the Glue role policy from §3.3
 
 ## 8. Glue catalog, connection, crawler (refs Req 7)
-- [~] 8.1 `aws_glue_catalog_database` `tickit` (depends 3.1)
-- [~] 8.2 `aws_glue_connection` `conRDS_tickit` (JDBC, `sg_glue`, subnet, JDBC URL from RDS endpoint) (depends 4.4)
-- [~] 8.3 `aws_glue_crawler` `NT_Accelerate_cwl_RDSTickit` (JDBC target `tickit`, role, target DB `tickit`) (depends 8.1, 3.1, 4.4)
+- [x] 8.1 `aws_glue_catalog_database` `tickit` (depends 3.1)
+- [x] 8.2 `aws_glue_connection` `conRDS_tickit` (JDBC, `sg_glue`, subnet, JDBC URL from RDS endpoint) (depends 4.4)
+- [x] 8.3 `aws_glue_crawler` `NT_Accelerate_cwl_RDSTickit` (JDBC target `tickit`, role, target DB `tickit`) (depends 8.1, 3.1, 4.4)
 
 ## 9. Glue extraction jobs (refs Req 8, 9)
 - [~] 9.1 Create `aws_glue_job` `jb_Stg_Extract_Category` (full load, 10 params, G.1X x2, Glue 3.0, bookmark, library, temp/log paths) (depends 2.3, 5.2, 8.2, 3.1)

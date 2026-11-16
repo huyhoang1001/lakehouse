@@ -431,6 +431,16 @@
         "executionId": "4eafccea-22bb-43d1-a624-bf78930653cc",
         "chatSessionId": "sess_82dfe3b7-875b-4bba-bc02-ad5e8fec018a",
         "timestamp": 1794807768384
+      },
+      {
+        "executionId": "654f8d29-0b4c-40e6-8eca-decbdb990bc3",
+        "chatSessionId": "sess_82dfe3b7-875b-4bba-bc02-ad5e8fec018a",
+        "timestamp": 1794809068755
+      },
+      {
+        "executionId": "654f8d29-0b4c-40e6-8eca-decbdb990bc3",
+        "chatSessionId": "sess_82dfe3b7-875b-4bba-bc02-ad5e8fec018a",
+        "timestamp": 1794809107759
       }
     ],
     "8.2 `aws_glue_connection` `conRDS_tickit` (JDBC, `sg_glue`, subnet, JDBC URL from RDS endpoint) (depends 4.4)": [
@@ -438,6 +448,16 @@
         "executionId": "4eafccea-22bb-43d1-a624-bf78930653cc",
         "chatSessionId": "sess_82dfe3b7-875b-4bba-bc02-ad5e8fec018a",
         "timestamp": 1794807768413
+      },
+      {
+        "executionId": "654f8d29-0b4c-40e6-8eca-decbdb990bc3",
+        "chatSessionId": "sess_82dfe3b7-875b-4bba-bc02-ad5e8fec018a",
+        "timestamp": 1794809113173
+      },
+      {
+        "executionId": "654f8d29-0b4c-40e6-8eca-decbdb990bc3",
+        "chatSessionId": "sess_82dfe3b7-875b-4bba-bc02-ad5e8fec018a",
+        "timestamp": 1794809159346
       }
     ],
     "8.3 `aws_glue_crawler` `NT_Accelerate_cwl_RDSTickit` (JDBC target `tickit`, role, target DB `tickit`) (depends 8.1, 3.1, 4.4)": [
@@ -445,6 +465,16 @@
         "executionId": "4eafccea-22bb-43d1-a624-bf78930653cc",
         "chatSessionId": "sess_82dfe3b7-875b-4bba-bc02-ad5e8fec018a",
         "timestamp": 1794807768435
+      },
+      {
+        "executionId": "654f8d29-0b4c-40e6-8eca-decbdb990bc3",
+        "chatSessionId": "sess_82dfe3b7-875b-4bba-bc02-ad5e8fec018a",
+        "timestamp": 1794809164435
+      },
+      {
+        "executionId": "654f8d29-0b4c-40e6-8eca-decbdb990bc3",
+        "chatSessionId": "sess_82dfe3b7-875b-4bba-bc02-ad5e8fec018a",
+        "timestamp": 1794809213799
       }
     ],
     "9.1 Create `aws_glue_job` `jb_Stg_Extract_Category` (full load, 10 params, G.1X x2, Glue 3.0, bookmark, library, temp/log paths) (depends 2.3, 5.2, 8.2, 3.1)": [
