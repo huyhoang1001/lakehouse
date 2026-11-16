@@ -628,6 +628,16 @@
         "executionId": "4eafccea-22bb-43d1-a624-bf78930653cc",
         "chatSessionId": "sess_82dfe3b7-875b-4bba-bc02-ad5e8fec018a",
         "timestamp": 1794807768666
+      },
+      {
+        "executionId": "c3f018e5-bfcc-4899-8ac2-c60d0cefb126",
+        "chatSessionId": "sess_82dfe3b7-875b-4bba-bc02-ad5e8fec018a",
+        "timestamp": 1794814697315
+      },
+      {
+        "executionId": "c3f018e5-bfcc-4899-8ac2-c60d0cefb126",
+        "chatSessionId": "sess_82dfe3b7-875b-4bba-bc02-ad5e8fec018a",
+        "timestamp": 1794815645101
       }
     ],
     "10.2 Run crawler: `aws glue start-crawler --name NT_Accelerate_cwl_RDSTickit` (depends 8.3)": [
@@ -635,6 +645,16 @@
         "executionId": "4eafccea-22bb-43d1-a624-bf78930653cc",
         "chatSessionId": "sess_82dfe3b7-875b-4bba-bc02-ad5e8fec018a",
         "timestamp": 1794807768690
+      },
+      {
+        "executionId": "57744722-e9c1-422d-8088-a18d3780948c",
+        "chatSessionId": "sess_82dfe3b7-875b-4bba-bc02-ad5e8fec018a",
+        "timestamp": 1794816053320
+      },
+      {
+        "executionId": "a1a22122-6111-448a-b68e-9557e31a0684",
+        "chatSessionId": "sess_54be1edd-80c3-4a83-a94a-f68818b32dd7",
+        "timestamp": 1794823725682
       }
     ],
     "10.3 Verify in Console: Glue → Databases → tickit shows 7 `tickit_dbo_*` tables": [

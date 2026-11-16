@@ -62,18 +62,18 @@ Implementation tasks for the spec `nt-accelerate-day1-ingestion`. Numbering foll
 - [x] 9.8 (optional) Create `aws_glue_job` `jb_Stg_Extract_ExcelFile` gated by `var.enable_flatfile_job` (depends 2.5)
 
 ## 10. Run and verify (refs Req 11)
-- [~] 10.1 `terraform apply`; capture outputs (depends all §2–§9)
-- [~] 10.2 Run crawler: `aws glue start-crawler --name NT_Accelerate_cwl_RDSTickit` (depends 8.3)
-- [~] 10.3 Verify in Console: Glue → Databases → tickit shows 7 `tickit_dbo_*` tables
-- [~] 10.4 Trigger the 6 full-load jobs; verify Parquet under `lake/bronze/tickit/<table>/<date>/`
-- [~] 10.5 Verify Console: DynamoDB `JOB_LOG` = SUCCEEDED, `JOB_STATUS` current
-- [~] 10.6 Trigger `jb_Stg_Extract_Sales`; verify `WATERMARKTABLE.DATA_VALUES` advanced
+- [x] 10.1 `terraform apply`; capture outputs (depends all §2–§9)
+- [ ] 10.2 Run crawler: `aws glue start-crawler --name NT_Accelerate_cwl_RDSTickit` (depends 8.3)
+- [ ] 10.3 Verify in Console: Glue → Databases → tickit shows 7 `tickit_dbo_*` tables
+- [ ] 10.4 Trigger the 6 full-load jobs; verify Parquet under `lake/bronze/tickit/<table>/<date>/`
+- [ ] 10.5 Verify Console: DynamoDB `JOB_LOG` = SUCCEEDED, `JOB_STATUS` current
+- [ ] 10.6 Trigger `jb_Stg_Extract_Sales`; verify `WATERMARKTABLE.DATA_VALUES` advanced
 
 ## 11. Teardown and cost control (refs Req 12)
-- [~] 11.1 Add a `null_resource` to empty the bucket before destroy (`aws s3 rm --recursive`) (optional but recommended)
-- [~] 11.2 `aws_db_instance` with `skip_final_snapshot=true` so destroy is clean
-- [~] 11.3 Document low-cost idle steps: stop RDS (`aws rds stop-db-instance`), delete secret (depends 5.1)
-- [~] 11.4 `terraform destroy` smoke test in sandbox
+- [ ] 11.1 Add a `null_resource` to empty the bucket before destroy (`aws s3 rm --recursive`) (optional but recommended)
+- [ ] 11.2 `aws_db_instance` with `skip_final_snapshot=true` so destroy is clean
+- [ ] 11.3 Document low-cost idle steps: stop RDS (`aws rds stop-db-instance`), delete secret (depends 5.1)
+- [ ] 11.4 `terraform destroy` smoke test in sandbox
 
 ## Verification runbook (refs Req 11) — Console-only checks
 1. S3 → `ntaccelerate` → `lake/bronze/tickit/<table>/<date>/` contains `.parquet`.
