@@ -1,0 +1,822 @@
+{
+  "Comment": "A description of my state machine",
+  "StartAt": "Read run_type from MASTER JOB CONFIG table",
+  "States": {
+    "Read run_type from MASTER JOB CONFIG table": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "arn:aws:lambda:us-east-1:377414509754:function:NT_Accelerate_Read_Run_Type:$LATEST",
+        "Payload": {
+          "p_masterjob_id": 3
+        }
+      },
+      "ResultPath": "$.result",
+      "OutputPath": "$",
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "Lambda.ServiceException",
+            "Lambda.AWSLambdaException",
+            "Lambda.SdkClientException"
+          ],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 6,
+          "BackoffRate": 2
+        }
+      ],
+      "Next": "Check configuration is correct? STOP if Wrong Config"
+    },
+    "Check configuration is correct? STOP if Wrong Config": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.result.Payload.flag",
+          "BooleanEquals": false,
+          "Next": "Stop because of not configure yet"
+        },
+        {
+          "Variable": "$.result.Payload.flag",
+          "BooleanEquals": true,
+          "Next": "Check run_type is NEW or RERUN"
+        }
+      ]
+    },
+    "Check run_type is NEW or RERUN": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.result.Payload.run_type",
+          "StringEquals": "NEW",
+          "Next": "Check Master Job Staging Ran"
+        },
+        {
+          "Variable": "$.result.Payload.run_type",
+          "StringEquals": "RERUN",
+          "Next": "Parallel"
+        }
+      ]
+    },
+    "Check Master Job Staging Ran": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "OutputPath": "$",
+      "Parameters": {
+        "FunctionName": "arn:aws:lambda:us-east-1:377414509754:function:NT_Accelerate_Check_Staging_Master_Job_Status:$LATEST",
+        "Payload": {
+          "p_run_date.$": "$.result.Payload.run_date"
+        }
+      },
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "Lambda.ServiceException",
+            "Lambda.AWSLambdaException",
+            "Lambda.SdkClientException"
+          ],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 6,
+          "BackoffRate": 2
+        }
+      ],
+      "Next": "Staging master job ran in day successfully? Yes: Running master job DW",
+      "ResultPath": "$.StgStatus"
+    },
+    "Staging master job ran in day successfully? Yes: Running master job DW": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.StgStatus.Payload.flag",
+          "BooleanEquals": false,
+          "Next": "Staging master job not running yet"
+        },
+        {
+          "Variable": "$.StgStatus.Payload.flag",
+          "BooleanEquals": true,
+          "Next": "Check JOB STATUS table"
+        }
+      ]
+    },
+    "Staging master job not running yet": {
+      "Type": "Fail"
+    },
+    "Check JOB STATUS table": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "Payload.$": "$",
+        "FunctionName": "arn:aws:lambda:us-east-1:377414509754:function:NT_Accelerate_Check_Job_Status:$LATEST"
+      },
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "Lambda.ServiceException",
+            "Lambda.AWSLambdaException",
+            "Lambda.SdkClientException"
+          ],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 6,
+          "BackoffRate": 2
+        }
+      ],
+      "ResultPath": "$.jobstatus",
+      "OutputPath": "$",
+      "Next": "Still Failed Job In Previous Run?"
+    },
+    "Still Failed Job In Previous Run?": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.jobstatus.Payload.FailedJobExisting",
+          "BooleanEquals": true,
+          "Next": "Update MasterJob Failed"
+        },
+        {
+          "Variable": "$.jobstatus.Payload.FailedJobExisting",
+          "BooleanEquals": false,
+          "Next": "Truncate table JOB_STATUS"
+        }
+      ]
+    },
+    "Update MasterJob Failed": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "OutputPath": "$",
+      "Parameters": {
+        "Payload": {
+          "p_masterjob_id": 3,
+          "p_run_date.$": "$.result.Payload.run_date",
+          "p_status": "FAILED"
+        },
+        "FunctionName": "arn:aws:lambda:us-east-1:377414509754:function:NT_Accelerate_Update_MasterJob_Status:$LATEST"
+      },
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "Lambda.ServiceException",
+            "Lambda.AWSLambdaException",
+            "Lambda.SdkClientException"
+          ],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 6,
+          "BackoffRate": 2
+        }
+      ],
+      "Next": "Fail",
+      "ResultPath": null
+    },
+    "Truncate table JOB_STATUS": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "OutputPath": "$",
+      "Parameters": {
+        "Payload.$": "$",
+        "FunctionName": "arn:aws:lambda:us-east-1:377414509754:function:NT_Accelerate_Truncate_Job_Status:$LATEST"
+      },
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "Lambda.ServiceException",
+            "Lambda.AWSLambdaException",
+            "Lambda.SdkClientException"
+          ],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 6,
+          "BackoffRate": 2
+        }
+      ],
+      "Next": "Parallel",
+      "ResultPath": "$.result1"
+    },
+    "Fail": {
+      "Type": "Fail"
+    },
+    "Stop because of not configure yet": {
+      "Type": "Fail",
+      "Error": "Stop because of not configure yet"
+    },
+    "Parallel": {
+      "Type": "Parallel",
+      "Next": "Check Dim Event",
+      "Branches": [
+        {
+          "StartAt": "Check Dim Date Job",
+          "States": {
+            "Check Dim Date Job": {
+              "Type": "Task",
+              "Resource": "arn:aws:states:::lambda:invoke",
+              "OutputPath": "$",
+              "Parameters": {
+                "FunctionName": "arn:aws:lambda:us-east-1:377414509754:function:NT_Accelerate_Is_Allow_Running:$LATEST",
+                "Payload": {
+                  "p_job_name": "jb_DW_Redshift_Load_DateDim",
+                  "p_run_date.$": "$.result.Payload.run_date",
+                  "p_run_type.$": "$.result.Payload.run_type"
+                }
+              },
+              "Retry": [
+                {
+                  "ErrorEquals": [
+                    "Lambda.ServiceException",
+                    "Lambda.AWSLambdaException",
+                    "Lambda.SdkClientException"
+                  ],
+                  "IntervalSeconds": 2,
+                  "MaxAttempts": 6,
+                  "BackoffRate": 2
+                }
+              ],
+              "ResultPath": "$.JobInfo",
+              "Next": "Is Dim Date Job Ran?"
+            },
+            "Is Dim Date Job Ran?": {
+              "Type": "Choice",
+              "Choices": [
+                {
+                  "Variable": "$.JobInfo.Payload.is_ran",
+                  "StringEquals": "Yes",
+                  "Next": "Update Dim Date job SUCCEEDED"
+                },
+                {
+                  "Variable": "$.JobInfo.Payload.is_ran",
+                  "StringEquals": "No",
+                  "Next": "Start Job Dim Date"
+                }
+              ]
+            },
+            "Update Dim Date job SUCCEEDED": {
+              "Type": "Task",
+              "Resource": "arn:aws:states:::lambda:invoke",
+              "OutputPath": "$.Payload",
+              "Parameters": {
+                "FunctionName": "arn:aws:lambda:us-east-1:377414509754:function:NT_Accelerate_Update_Job_Status:$LATEST",
+                "Payload": {
+                  "JobName": "jb_DW_Redshift_Load_DateDim",
+                  "BatchId.$": "$.result.Payload.batch_id",
+                  "RunDate.$": "$.result.Payload.run_date"
+                }
+              },
+              "Retry": [
+                {
+                  "ErrorEquals": [
+                    "Lambda.ServiceException",
+                    "Lambda.AWSLambdaException",
+                    "Lambda.SdkClientException"
+                  ],
+                  "IntervalSeconds": 2,
+                  "MaxAttempts": 6,
+                  "BackoffRate": 2
+                }
+              ],
+              "End": true
+            },
+            "Start Job Dim Date": {
+              "Type": "Task",
+              "Resource": "arn:aws:states:::glue:startJobRun.sync",
+              "Parameters": {
+                "JobName": "jb_DW_Redshift_Load_DateDim",
+                "Arguments": {
+                  "--p_batch_id.$": "$.result.Payload.batch_id",
+                  "--p_job_name.$": "$.JobInfo.Payload.var_job_name",
+                  "--p_region.$": "$.JobInfo.Payload.var_region",
+                  "--p_run_date.$": "$.result.Payload.run_date",
+                  "--p_src_databaseName.$": "$.JobInfo.Payload.var_src_db",
+                  "--p_src_tableName.$": "$.JobInfo.Payload.var_scr_table",
+                  "--p_tar_databaseName.$": "$.JobInfo.Payload.var_trg_db",
+                  "--p_tar_tablename.$": "$.JobInfo.Payload.var_trg_table",
+                  "--p_catalog_con.$": "$.JobInfo.Payload.var_catalog_con",
+                  "--p_postscript.$": "$.JobInfo.Payload.var_postscript",
+                  "--p_prescript.$": "$.JobInfo.Payload.var_prescript",
+                  "--p_redshift_temp.$": "$.JobInfo.Payload.var_tempfolder"
+                }
+              },
+              "End": true,
+              "ResultPath": "$",
+              "OutputPath": "$"
+            }
+          }
+        },
+        {
+          "StartAt": "Check Dim Venue Job",
+          "States": {
+            "Check Dim Venue Job": {
+              "Type": "Task",
+              "Resource": "arn:aws:states:::lambda:invoke",
+              "OutputPath": "$",
+              "Parameters": {
+                "FunctionName": "arn:aws:lambda:us-east-1:377414509754:function:NT_Accelerate_Is_Allow_Running:$LATEST",
+                "Payload": {
+                  "p_job_name": "jb_DW_Redshift_Load_VenueDim",
+                  "p_run_date.$": "$.result.Payload.run_date",
+                  "p_run_type.$": "$.result.Payload.run_type"
+                }
+              },
+              "Retry": [
+                {
+                  "ErrorEquals": [
+                    "Lambda.ServiceException",
+                    "Lambda.AWSLambdaException",
+                    "Lambda.SdkClientException"
+                  ],
+                  "IntervalSeconds": 2,
+                  "MaxAttempts": 6,
+                  "BackoffRate": 2
+                }
+              ],
+              "ResultPath": "$.JobInfo",
+              "Next": "Is Dim Venue Ran?"
+            },
+            "Is Dim Venue Ran?": {
+              "Type": "Choice",
+              "Choices": [
+                {
+                  "Variable": "$.JobInfo.Payload.is_ran",
+                  "StringEquals": "Yes",
+                  "Next": "Update Dim Venue job SUCCEEDED"
+                },
+                {
+                  "Variable": "$.JobInfo.Payload.is_ran",
+                  "StringEquals": "No",
+                  "Next": "Start Job Dim Venue"
+                }
+              ]
+            },
+            "Update Dim Venue job SUCCEEDED": {
+              "Type": "Task",
+              "Resource": "arn:aws:states:::lambda:invoke",
+              "OutputPath": "$.Payload",
+              "Parameters": {
+                "FunctionName": "arn:aws:lambda:us-east-1:377414509754:function:NT_Accelerate_Update_Job_Status:$LATEST",
+                "Payload": {
+                  "JobName": "jb_DW_Redshift_Load_VenueDim",
+                  "BatchId.$": "$.result.Payload.batch_id",
+                  "RunDate.$": "$.result.Payload.run_date"
+                }
+              },
+              "Retry": [
+                {
+                  "ErrorEquals": [
+                    "Lambda.ServiceException",
+                    "Lambda.AWSLambdaException",
+                    "Lambda.SdkClientException"
+                  ],
+                  "IntervalSeconds": 2,
+                  "MaxAttempts": 6,
+                  "BackoffRate": 2
+                }
+              ],
+              "End": true
+            },
+            "Start Job Dim Venue": {
+              "Type": "Task",
+              "Resource": "arn:aws:states:::glue:startJobRun.sync",
+              "Parameters": {
+                "JobName": "jb_DW_Redshift_Load_VenueDim",
+                "Arguments": {
+                  "--p_batch_id.$": "$.result.Payload.batch_id",
+                  "--p_job_name.$": "$.JobInfo.Payload.var_job_name",
+                  "--p_region.$": "$.JobInfo.Payload.var_region",
+                  "--p_run_date.$": "$.result.Payload.run_date",
+                  "--p_src_databaseName.$": "$.JobInfo.Payload.var_src_db",
+                  "--p_src_tableName.$": "$.JobInfo.Payload.var_scr_table",
+                  "--p_tar_databaseName.$": "$.JobInfo.Payload.var_trg_db",
+                  "--p_tar_tablename.$": "$.JobInfo.Payload.var_trg_table",
+                  "--p_catalog_con.$": "$.JobInfo.Payload.var_catalog_con",
+                  "--p_postscript.$": "$.JobInfo.Payload.var_postscript",
+                  "--p_prescript.$": "$.JobInfo.Payload.var_prescript",
+                  "--p_redshift_temp.$": "$.JobInfo.Payload.var_tempfolder"
+                }
+              },
+              "End": true,
+              "ResultPath": "$",
+              "OutputPath": "$"
+            }
+          }
+        },
+        {
+          "StartAt": "Check Dim Category Job",
+          "States": {
+            "Check Dim Category Job": {
+              "Type": "Task",
+              "Resource": "arn:aws:states:::lambda:invoke",
+              "OutputPath": "$",
+              "Parameters": {
+                "FunctionName": "arn:aws:lambda:us-east-1:377414509754:function:NT_Accelerate_Is_Allow_Running:$LATEST",
+                "Payload": {
+                  "p_job_name": "jb_DW_Redshift_Load_CategoryDim",
+                  "p_run_date.$": "$.result.Payload.run_date",
+                  "p_run_type.$": "$.result.Payload.run_type"
+                }
+              },
+              "Retry": [
+                {
+                  "ErrorEquals": [
+                    "Lambda.ServiceException",
+                    "Lambda.AWSLambdaException",
+                    "Lambda.SdkClientException"
+                  ],
+                  "IntervalSeconds": 2,
+                  "MaxAttempts": 6,
+                  "BackoffRate": 2
+                }
+              ],
+              "ResultPath": "$.JobInfo",
+              "Next": "Is Dim Category Ran?"
+            },
+            "Is Dim Category Ran?": {
+              "Type": "Choice",
+              "Choices": [
+                {
+                  "Variable": "$.JobInfo.Payload.is_ran",
+                  "StringEquals": "Yes",
+                  "Next": "Update Dim Category job SUCCEEDED"
+                },
+                {
+                  "Variable": "$.JobInfo.Payload.is_ran",
+                  "StringEquals": "No",
+                  "Next": "Start Job Dim Category"
+                }
+              ]
+            },
+            "Update Dim Category job SUCCEEDED": {
+              "Type": "Task",
+              "Resource": "arn:aws:states:::lambda:invoke",
+              "OutputPath": "$.Payload",
+              "Parameters": {
+                "FunctionName": "arn:aws:lambda:us-east-1:377414509754:function:NT_Accelerate_Update_Job_Status:$LATEST",
+                "Payload": {
+                  "JobName": "jb_DW_Redshift_Load_CategoryDim",
+                  "BatchId.$": "$.result.Payload.batch_id",
+                  "RunDate.$": "$.result.Payload.run_date"
+                }
+              },
+              "Retry": [
+                {
+                  "ErrorEquals": [
+                    "Lambda.ServiceException",
+                    "Lambda.AWSLambdaException",
+                    "Lambda.SdkClientException"
+                  ],
+                  "IntervalSeconds": 2,
+                  "MaxAttempts": 6,
+                  "BackoffRate": 2
+                }
+              ],
+              "End": true
+            },
+            "Start Job Dim Category": {
+              "Type": "Task",
+              "Resource": "arn:aws:states:::glue:startJobRun.sync",
+              "Parameters": {
+                "JobName": "jb_DW_Redshift_Load_CategoryDim",
+                "Arguments": {
+                  "--p_batch_id.$": "$.result.Payload.batch_id",
+                  "--p_job_name.$": "$.JobInfo.Payload.var_job_name",
+                  "--p_region.$": "$.JobInfo.Payload.var_region",
+                  "--p_run_date.$": "$.result.Payload.run_date",
+                  "--p_src_databaseName.$": "$.JobInfo.Payload.var_src_db",
+                  "--p_src_tableName.$": "$.JobInfo.Payload.var_scr_table",
+                  "--p_tar_databaseName.$": "$.JobInfo.Payload.var_trg_db",
+                  "--p_tar_tablename.$": "$.JobInfo.Payload.var_trg_table",
+                  "--p_catalog_con.$": "$.JobInfo.Payload.var_catalog_con",
+                  "--p_postscript.$": "$.JobInfo.Payload.var_postscript",
+                  "--p_prescript.$": "$.JobInfo.Payload.var_prescript",
+                  "--p_redshift_temp.$": "$.JobInfo.Payload.var_tempfolder"
+                }
+              },
+              "End": true,
+              "ResultPath": "$",
+              "OutputPath": "$"
+            }
+          }
+        },
+        {
+          "StartAt": "Check Dim User job",
+          "States": {
+            "Check Dim User job": {
+              "Type": "Task",
+              "Resource": "arn:aws:states:::lambda:invoke",
+              "OutputPath": "$",
+              "Parameters": {
+                "FunctionName": "arn:aws:lambda:us-east-1:377414509754:function:NT_Accelerate_Is_Allow_Running:$LATEST",
+                "Payload": {
+                  "p_job_name": "jb_DW_Redshift_Load_UserDim",
+                  "p_run_date.$": "$.result.Payload.run_date",
+                  "p_run_type.$": "$.result.Payload.run_type"
+                }
+              },
+              "Retry": [
+                {
+                  "ErrorEquals": [
+                    "Lambda.ServiceException",
+                    "Lambda.AWSLambdaException",
+                    "Lambda.SdkClientException"
+                  ],
+                  "IntervalSeconds": 2,
+                  "MaxAttempts": 6,
+                  "BackoffRate": 2
+                }
+              ],
+              "ResultPath": "$.JobInfo",
+              "Next": "Is Dim User Ran?"
+            },
+            "Is Dim User Ran?": {
+              "Type": "Choice",
+              "Choices": [
+                {
+                  "Variable": "$.JobInfo.Payload.is_ran",
+                  "StringEquals": "Yes",
+                  "Next": "Update Dim User job SUCCEEDED"
+                },
+                {
+                  "Variable": "$.JobInfo.Payload.is_ran",
+                  "StringEquals": "No",
+                  "Next": "Start Job Dim User"
+                }
+              ]
+            },
+            "Update Dim User job SUCCEEDED": {
+              "Type": "Task",
+              "Resource": "arn:aws:states:::lambda:invoke",
+              "OutputPath": "$.Payload",
+              "Parameters": {
+                "FunctionName": "arn:aws:lambda:us-east-1:377414509754:function:NT_Accelerate_Update_Job_Status:$LATEST",
+                "Payload": {
+                  "JobName": "jb_DW_Redshift_Load_UserDim",
+                  "BatchId.$": "$.result.Payload.batch_id",
+                  "RunDate.$": "$.result.Payload.run_date"
+                }
+              },
+              "Retry": [
+                {
+                  "ErrorEquals": [
+                    "Lambda.ServiceException",
+                    "Lambda.AWSLambdaException",
+                    "Lambda.SdkClientException"
+                  ],
+                  "IntervalSeconds": 2,
+                  "MaxAttempts": 6,
+                  "BackoffRate": 2
+                }
+              ],
+              "End": true
+            },
+            "Start Job Dim User": {
+              "Type": "Task",
+              "Resource": "arn:aws:states:::glue:startJobRun.sync",
+              "Parameters": {
+                "JobName": "jb_DW_Redshift_Load_UserDim",
+                "Arguments": {
+                  "--p_batch_id.$": "$.result.Payload.batch_id",
+                  "--p_job_name.$": "$.JobInfo.Payload.var_job_name",
+                  "--p_region.$": "$.JobInfo.Payload.var_region",
+                  "--p_run_date.$": "$.result.Payload.run_date",
+                  "--p_src_databaseName.$": "$.JobInfo.Payload.var_src_db",
+                  "--p_src_tableName.$": "$.JobInfo.Payload.var_scr_table",
+                  "--p_tar_databaseName.$": "$.JobInfo.Payload.var_trg_db",
+                  "--p_tar_tablename.$": "$.JobInfo.Payload.var_trg_table",
+                  "--p_catalog_con.$": "$.JobInfo.Payload.var_catalog_con",
+                  "--p_postscript.$": "$.JobInfo.Payload.var_postscript",
+                  "--p_prescript.$": "$.JobInfo.Payload.var_prescript",
+                  "--p_redshift_temp.$": "$.JobInfo.Payload.var_tempfolder"
+                }
+              },
+              "End": true
+            }
+          }
+        }
+      ],
+      "Comment": "This parallel to run dim tables",
+      "ResultPath": "$.DimStage",
+      "OutputPath": "$",
+      "Catch": [
+        {
+          "ErrorEquals": [
+            "States.ALL"
+          ],
+          "Next": "Update Master Job Failed for Job Failed"
+        }
+      ]
+    },
+    "Update Master Job Failed for Job Failed": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "OutputPath": "$.Payload",
+      "Parameters": {
+        "FunctionName": "arn:aws:lambda:us-east-1:377414509754:function:NT_Accelerate_Update_MasterJob_Status:$LATEST",
+        "Payload": {
+          "p_masterjob_id": 3,
+          "p_run_date.$": "$.result.Payload.run_date",
+          "p_status": "FAILED"
+        }
+      },
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "Lambda.ServiceException",
+            "Lambda.AWSLambdaException",
+            "Lambda.SdkClientException"
+          ],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 6,
+          "BackoffRate": 2
+        }
+      ],
+      "Next": "Send mail",
+      "ResultPath": null
+    },
+    "Check Dim Event": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "OutputPath": "$",
+      "Parameters": {
+        "FunctionName": "arn:aws:lambda:us-east-1:377414509754:function:NT_Accelerate_Is_Allow_Running:$LATEST",
+        "Payload": {
+          "p_job_name": "jb_DW_Redshift_Load_EventDim",
+          "p_run_date.$": "$.result.Payload.run_date",
+          "p_run_type.$": "$.result.Payload.run_type"
+        }
+      },
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "Lambda.ServiceException",
+            "Lambda.AWSLambdaException",
+            "Lambda.SdkClientException"
+          ],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 6,
+          "BackoffRate": 2
+        }
+      ],
+      "Next": "Is Dim Event Ran?",
+      "ResultPath": "$.JobInfo"
+    },
+    "Is Dim Event Ran?": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.JobInfo.Payload.is_ran",
+          "StringEquals": "Yes",
+          "Next": "Update Dim Event job SUCCEEDED"
+        },
+        {
+          "Variable": "$.JobInfo.Payload.is_ran",
+          "StringEquals": "No",
+          "Next": "Start Job Dim Event"
+        }
+      ]
+    },
+    "Update Dim Event job SUCCEEDED": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "OutputPath": "$",
+      "Parameters": {
+        "FunctionName": "arn:aws:lambda:us-east-1:377414509754:function:NT_Accelerate_Update_Job_Status:$LATEST",
+        "Payload": {
+          "JobName": "jb_DW_Redshift_Load_EventDim",
+          "BatchId.$": "$.result.Payload.batch_id",
+          "RunDate.$": "$.result.Payload.run_date"
+        }
+      },
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "Lambda.ServiceException",
+            "Lambda.AWSLambdaException",
+            "Lambda.SdkClientException"
+          ],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 6,
+          "BackoffRate": 2
+        }
+      ],
+      "Next": "Check Fact Sales",
+      "ResultPath": null
+    },
+    "Send mail": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "OutputPath": "$.Payload",
+      "Parameters": {
+        "Payload.$": "$",
+        "FunctionName": "arn:aws:lambda:us-east-1:377414509754:function:NT_Accelerate_Send_Mail:$LATEST"
+      },
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "Lambda.ServiceException",
+            "Lambda.AWSLambdaException",
+            "Lambda.SdkClientException"
+          ],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 6,
+          "BackoffRate": 2
+        }
+      ],
+      "End": true
+    },
+    "Start Job Dim Event": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::glue:startJobRun.sync",
+      "Parameters": {
+        "JobName": "jb_DW_Redshift_Load_EventDim",
+        "Arguments": {
+          "--p_batch_id.$": "$.result.Payload.batch_id",
+          "--p_job_name.$": "$.JobInfo.Payload.var_job_name",
+          "--p_region.$": "$.JobInfo.Payload.var_region",
+          "--p_run_date.$": "$.result.Payload.run_date",
+          "--p_src_databaseName.$": "$.JobInfo.Payload.var_src_db",
+          "--p_src_tableName.$": "$.JobInfo.Payload.var_scr_table",
+          "--p_tar_databaseName.$": "$.JobInfo.Payload.var_trg_db",
+          "--p_tar_tablename.$": "$.JobInfo.Payload.var_trg_table",
+          "--p_catalog_con.$": "$.JobInfo.Payload.var_catalog_con",
+          "--p_postscript.$": "$.JobInfo.Payload.var_postscript",
+          "--p_prescript.$": "$.JobInfo.Payload.var_prescript",
+          "--p_redshift_temp.$": "$.JobInfo.Payload.var_tempfolder"
+        }
+      },
+      "Next": "Check Fact Sales",
+      "ResultPath": null,
+      "OutputPath": "$"
+    },
+    "Check Fact Sales": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "OutputPath": "$",
+      "Parameters": {
+        "FunctionName": "arn:aws:lambda:us-east-1:377414509754:function:NT_Accelerate_Is_Allow_Running:$LATEST",
+        "Payload": {
+          "p_job_name": "jb_DW_Redshift_Load_SalesFact",
+          "p_run_date.$": "$.result.Payload.run_date",
+          "p_run_type.$": "$.result.Payload.run_type"
+        }
+      },
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "Lambda.ServiceException",
+            "Lambda.AWSLambdaException",
+            "Lambda.SdkClientException"
+          ],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 6,
+          "BackoffRate": 2
+        }
+      ],
+      "Next": "Start Job Sales Fact",
+      "ResultPath": "$.JobInfo"
+    },
+    "Start Job Sales Fact": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::glue:startJobRun.sync",
+      "Parameters": {
+        "JobName": "jb_DW_Redshift_Load_SalesFact",
+        "Arguments": {
+          "--p_batch_id.$": "$.result.Payload.batch_id",
+          "--p_job_name.$": "$.JobInfo.Payload.var_job_name",
+          "--p_region.$": "$.JobInfo.Payload.var_region",
+          "--p_run_date.$": "$.result.Payload.run_date",
+          "--p_src_databaseName.$": "$.JobInfo.Payload.var_src_db",
+          "--p_src_tableName.$": "$.JobInfo.Payload.var_scr_table",
+          "--p_tar_databaseName.$": "$.JobInfo.Payload.var_trg_db",
+          "--p_tar_tablename.$": "$.JobInfo.Payload.var_trg_table",
+          "--p_catalog_con.$": "$.JobInfo.Payload.var_catalog_con",
+          "--p_postscript.$": "$.JobInfo.Payload.var_postscript",
+          "--p_prescript.$": "$.JobInfo.Payload.var_prescript",
+          "--p_redshift_temp.$": "$.JobInfo.Payload.var_tempfolder"
+        }
+      },
+      "Next": "Update Master Job Succeeded",
+      "ResultPath": null,
+      "OutputPath": "$"
+    },
+    "Update Master Job Succeeded": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "OutputPath": "$",
+      "Parameters": {
+        "FunctionName": "arn:aws:lambda:us-east-1:377414509754:function:NT_Accelerate_Update_MasterJob_Status:$LATEST",
+        "Payload": {
+          "p_masterjob_id": 3,
+          "p_run_date.$": "$.result.Payload.run_date",
+          "p_status": "SUCCEEDED"
+        }
+      },
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "Lambda.ServiceException",
+            "Lambda.AWSLambdaException",
+            "Lambda.SdkClientException"
+          ],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 6,
+          "BackoffRate": 2
+        }
+      ],
+      "Next": "Send mail",
+      "ResultPath": null
+    }
+  }
+}

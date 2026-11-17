@@ -1,0 +1,936 @@
+{
+  "Comment": "A description of my state machine",
+  "StartAt": "Read run_type from MASTER JOB CONFIG table",
+  "States": {
+    "Read run_type from MASTER JOB CONFIG table": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "arn:aws:lambda:us-east-1:377414509754:function:NT_Accelerate_Read_Run_Type:$LATEST",
+        "Payload": {
+          "p_masterjob_id": 1
+        }
+      },
+      "ResultPath": "$.result",
+      "OutputPath": "$",
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "Lambda.ServiceException",
+            "Lambda.AWSLambdaException",
+            "Lambda.SdkClientException"
+          ],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 6,
+          "BackoffRate": 2
+        }
+      ],
+      "Next": "Check configuration is correct? STOP if Wrong Config"
+    },
+    "Check configuration is correct? STOP if Wrong Config": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.result.Payload.flag",
+          "BooleanEquals": false,
+          "Next": "Stop because of not configure yet"
+        },
+        {
+          "Variable": "$.result.Payload.flag",
+          "BooleanEquals": true,
+          "Next": "Check run_type is NEW or RERUN"
+        }
+      ]
+    },
+    "Check run_type is NEW or RERUN": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.result.Payload.run_type",
+          "StringEquals": "NEW",
+          "Next": "Check JOB STATUS table"
+        },
+        {
+          "Variable": "$.result.Payload.run_type",
+          "StringEquals": "RERUN",
+          "Next": "Run jobs in parallel"
+        }
+      ]
+    },
+    "Check JOB STATUS table": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "Payload.$": "$",
+        "FunctionName": "arn:aws:lambda:us-east-1:377414509754:function:NT_Accelerate_Check_Job_Status:$LATEST"
+      },
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "Lambda.ServiceException",
+            "Lambda.AWSLambdaException",
+            "Lambda.SdkClientException"
+          ],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 6,
+          "BackoffRate": 2
+        }
+      ],
+      "ResultPath": "$.jobstatus",
+      "OutputPath": "$",
+      "Next": "Still Failed Job In Previous Run?"
+    },
+    "Still Failed Job In Previous Run?": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.jobstatus.Payload.FailedJobExisting",
+          "BooleanEquals": true,
+          "Next": "Update MasterJob Failed"
+        },
+        {
+          "Variable": "$.jobstatus.Payload.FailedJobExisting",
+          "BooleanEquals": false,
+          "Next": "Truncate table JOB_STATUS"
+        }
+      ]
+    },
+    "Update MasterJob Failed": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "OutputPath": "$",
+      "Parameters": {
+        "Payload": {
+          "p_masterjob_id": 1,
+          "p_run_date.$": "$.result.Payload.run_date",
+          "p_status": "FAILED"
+        },
+        "FunctionName": "arn:aws:lambda:us-east-1:377414509754:function:NT_Accelerate_Update_MasterJob_Status:$LATEST"
+      },
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "Lambda.ServiceException",
+            "Lambda.AWSLambdaException",
+            "Lambda.SdkClientException"
+          ],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 6,
+          "BackoffRate": 2
+        }
+      ],
+      "Next": "Fail",
+      "ResultPath": null
+    },
+    "Truncate table JOB_STATUS": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "OutputPath": "$",
+      "Parameters": {
+        "Payload.$": "$",
+        "FunctionName": "arn:aws:lambda:us-east-1:377414509754:function:NT_Accelerate_Truncate_Job_Status:$LATEST"
+      },
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "Lambda.ServiceException",
+            "Lambda.AWSLambdaException",
+            "Lambda.SdkClientException"
+          ],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 6,
+          "BackoffRate": 2
+        }
+      ],
+      "Next": "Run jobs in parallel",
+      "ResultPath": "$.result1"
+    },
+    "Fail": {
+      "Type": "Fail"
+    },
+    "Stop because of not configure yet": {
+      "Type": "Fail",
+      "Error": "Stop because of not configure yet"
+    },
+    "Run jobs in parallel": {
+      "Type": "Parallel",
+      "Branches": [
+        {
+          "StartAt": "Check Stg_Extract_Category job",
+          "States": {
+            "Check Stg_Extract_Category job": {
+              "Type": "Task",
+              "Resource": "arn:aws:states:::lambda:invoke",
+              "OutputPath": "$",
+              "Parameters": {
+                "FunctionName": "arn:aws:lambda:us-east-1:377414509754:function:NT_Accelerate_Is_Allow_Running:$LATEST",
+                "Payload": {
+                  "p_job_name": "jb_Stg_Extract_Category",
+                  "p_run_date.$": "$.result.Payload.run_date",
+                  "p_run_type.$": "$.result.Payload.run_type"
+                }
+              },
+              "Retry": [
+                {
+                  "ErrorEquals": [
+                    "Lambda.ServiceException",
+                    "Lambda.AWSLambdaException",
+                    "Lambda.SdkClientException"
+                  ],
+                  "IntervalSeconds": 2,
+                  "MaxAttempts": 6,
+                  "BackoffRate": 2
+                }
+              ],
+              "ResultPath": "$.JobInfo",
+              "Next": "Is Stg_Extract_Category Ran?"
+            },
+            "Is Stg_Extract_Category Ran?": {
+              "Type": "Choice",
+              "Choices": [
+                {
+                  "Variable": "$.JobInfo.Payload.is_ran",
+                  "StringEquals": "Yes",
+                  "Comment": "Single run config job & job ran in day once and run type = NEW",
+                  "Next": "Update Category job status is SUCCEEDED"
+                },
+                {
+                  "Variable": "$.JobInfo.Payload.is_ran",
+                  "StringEquals": "No",
+                  "Comment": "Multiple run config or not run in day yet or rerun because of FAILED",
+                  "Next": "Start job jb_Stg_Extract_Category"
+                }
+              ]
+            },
+            "Update Category job status is SUCCEEDED": {
+              "Type": "Task",
+              "Resource": "arn:aws:states:::lambda:invoke",
+              "OutputPath": "$.Payload",
+              "Parameters": {
+                "FunctionName": "arn:aws:lambda:us-east-1:377414509754:function:NT_Accelerate_Update_Job_Status:$LATEST",
+                "Payload": {
+                  "JobName": "jb_Stg_Extract_Category",
+                  "BatchId.$": "$.result.Payload.batch_id",
+                  "RunDate.$": "$.result.Payload.run_date"
+                }
+              },
+              "Retry": [
+                {
+                  "ErrorEquals": [
+                    "Lambda.ServiceException",
+                    "Lambda.AWSLambdaException",
+                    "Lambda.SdkClientException"
+                  ],
+                  "IntervalSeconds": 2,
+                  "MaxAttempts": 6,
+                  "BackoffRate": 2
+                }
+              ],
+              "End": true
+            },
+            "Start job jb_Stg_Extract_Category": {
+              "Type": "Task",
+              "Resource": "arn:aws:states:::glue:startJobRun.sync",
+              "Parameters": {
+                "JobName": "jb_Stg_Extract_Category",
+                "Arguments": {
+                  "--p_job_name.$": "$.JobInfo.Payload.var_job_name",
+                  "--catalog_conn.$": "$.JobInfo.Payload.var_catalog_con",
+                  "--p_is_incremental_load.$": "$.JobInfo.Payload.var_incremental_load",
+                  "--p_batch_id.$": "$.result.Payload.batch_id",
+                  "--p_region.$": "$.JobInfo.Payload.var_region",
+                  "--p_run_date.$": "$.result.Payload.run_date",
+                  "--p_src_databaseName.$": "$.JobInfo.Payload.var_src_db",
+                  "--p_src_tableName.$": "$.JobInfo.Payload.var_scr_table",
+                  "--p_tar_databaseName.$": "$.JobInfo.Payload.var_trg_db",
+                  "--p_tar_tablename.$": "$.JobInfo.Payload.var_trg_table"
+                }
+              },
+              "End": true,
+              "ResultPath": null
+            }
+          }
+        },
+        {
+          "StartAt": "Check Stg_Extract_Date job",
+          "States": {
+            "Check Stg_Extract_Date job": {
+              "Type": "Task",
+              "Resource": "arn:aws:states:::lambda:invoke",
+              "OutputPath": "$",
+              "Parameters": {
+                "FunctionName": "arn:aws:lambda:us-east-1:377414509754:function:NT_Accelerate_Is_Allow_Running:$LATEST",
+                "Payload": {
+                  "p_job_name": "jb_Stg_Extract_Date",
+                  "p_run_date.$": "$.result.Payload.run_date",
+                  "p_run_type.$": "$.result.Payload.run_type"
+                }
+              },
+              "Retry": [
+                {
+                  "ErrorEquals": [
+                    "Lambda.ServiceException",
+                    "Lambda.AWSLambdaException",
+                    "Lambda.SdkClientException"
+                  ],
+                  "IntervalSeconds": 2,
+                  "MaxAttempts": 6,
+                  "BackoffRate": 2
+                }
+              ],
+              "ResultPath": "$.JobInfo",
+              "Next": "Is Stg_Extract_Date Ran?"
+            },
+            "Is Stg_Extract_Date Ran?": {
+              "Type": "Choice",
+              "Choices": [
+                {
+                  "Variable": "$.JobInfo.Payload.is_ran",
+                  "StringEquals": "Yes",
+                  "Next": "Update Date job status is SUCCEEDED"
+                },
+                {
+                  "Variable": "$.JobInfo.Payload.is_ran",
+                  "StringEquals": "No",
+                  "Next": "Start job jb_Stg_Extract_Date"
+                }
+              ]
+            },
+            "Update Date job status is SUCCEEDED": {
+              "Type": "Task",
+              "Resource": "arn:aws:states:::lambda:invoke",
+              "OutputPath": "$.Payload",
+              "Parameters": {
+                "FunctionName": "arn:aws:lambda:us-east-1:377414509754:function:NT_Accelerate_Update_Job_Status:$LATEST",
+                "Payload": {
+                  "JobName": "jb_Stg_Extract_Date",
+                  "BatchId.$": "$.result.Payload.batch_id",
+                  "RunDate.$": "$.result.Payload.run_date"
+                }
+              },
+              "Retry": [
+                {
+                  "ErrorEquals": [
+                    "Lambda.ServiceException",
+                    "Lambda.AWSLambdaException",
+                    "Lambda.SdkClientException"
+                  ],
+                  "IntervalSeconds": 2,
+                  "MaxAttempts": 6,
+                  "BackoffRate": 2
+                }
+              ],
+              "End": true
+            },
+            "Start job jb_Stg_Extract_Date": {
+              "Type": "Task",
+              "Resource": "arn:aws:states:::glue:startJobRun.sync",
+              "Parameters": {
+                "JobName": "jb_Stg_Extract_Date",
+                "Arguments": {
+                  "--p_job_name.$": "$.JobInfo.Payload.var_job_name",
+                  "--catalog_conn.$": "$.JobInfo.Payload.var_catalog_con",
+                  "--p_is_incremental_load.$": "$.JobInfo.Payload.var_incremental_load",
+                  "--p_batch_id.$": "$.result.Payload.batch_id",
+                  "--p_region.$": "$.JobInfo.Payload.var_region",
+                  "--p_run_date.$": "$.result.Payload.run_date",
+                  "--p_src_databaseName.$": "$.JobInfo.Payload.var_src_db",
+                  "--p_src_tableName.$": "$.JobInfo.Payload.var_scr_table",
+                  "--p_tar_databaseName.$": "$.JobInfo.Payload.var_trg_db",
+                  "--p_tar_tablename.$": "$.JobInfo.Payload.var_trg_table"
+                }
+              },
+              "End": true,
+              "ResultPath": null,
+              "OutputPath": "$"
+            }
+          }
+        },
+        {
+          "StartAt": "Check Stg_Extract_Venue job",
+          "States": {
+            "Check Stg_Extract_Venue job": {
+              "Type": "Task",
+              "Resource": "arn:aws:states:::lambda:invoke",
+              "OutputPath": "$",
+              "Parameters": {
+                "FunctionName": "arn:aws:lambda:us-east-1:377414509754:function:NT_Accelerate_Is_Allow_Running:$LATEST",
+                "Payload": {
+                  "p_job_name": "jb_Stg_Extract_Venue",
+                  "p_run_date.$": "$.result.Payload.run_date",
+                  "p_run_type.$": "$.result.Payload.run_type"
+                }
+              },
+              "Retry": [
+                {
+                  "ErrorEquals": [
+                    "Lambda.ServiceException",
+                    "Lambda.AWSLambdaException",
+                    "Lambda.SdkClientException"
+                  ],
+                  "IntervalSeconds": 2,
+                  "MaxAttempts": 6,
+                  "BackoffRate": 2
+                }
+              ],
+              "ResultPath": "$.JobInfo",
+              "Next": "Is Stg_Extract_Venue Ran?"
+            },
+            "Is Stg_Extract_Venue Ran?": {
+              "Type": "Choice",
+              "Choices": [
+                {
+                  "Variable": "$.JobInfo.Payload.is_ran",
+                  "StringEquals": "Yes",
+                  "Next": "Update Venue job status is SUCCEEDED"
+                },
+                {
+                  "Variable": "$.JobInfo.Payload.is_ran",
+                  "StringEquals": "No",
+                  "Next": "Start Job jb_Stg_Extract_Venue"
+                }
+              ]
+            },
+            "Update Venue job status is SUCCEEDED": {
+              "Type": "Task",
+              "Resource": "arn:aws:states:::lambda:invoke",
+              "OutputPath": "$.Payload",
+              "Parameters": {
+                "FunctionName": "arn:aws:lambda:us-east-1:377414509754:function:NT_Accelerate_Update_Job_Status:$LATEST",
+                "Payload": {
+                  "JobName": "jb_Stg_Extract_Venue",
+                  "BatchId.$": "$.result.Payload.batch_id",
+                  "RunDate.$": "$.result.Payload.run_date"
+                }
+              },
+              "Retry": [
+                {
+                  "ErrorEquals": [
+                    "Lambda.ServiceException",
+                    "Lambda.AWSLambdaException",
+                    "Lambda.SdkClientException"
+                  ],
+                  "IntervalSeconds": 2,
+                  "MaxAttempts": 6,
+                  "BackoffRate": 2
+                }
+              ],
+              "End": true
+            },
+            "Start Job jb_Stg_Extract_Venue": {
+              "Type": "Task",
+              "Resource": "arn:aws:states:::glue:startJobRun.sync",
+              "Parameters": {
+                "JobName": "jb_Stg_Extract_Venue",
+                "Arguments": {
+                  "--p_job_name.$": "$.JobInfo.Payload.var_job_name",
+                  "--catalog_conn.$": "$.JobInfo.Payload.var_catalog_con",
+                  "--p_is_incremental_load.$": "$.JobInfo.Payload.var_incremental_load",
+                  "--p_batch_id.$": "$.result.Payload.batch_id",
+                  "--p_region.$": "$.JobInfo.Payload.var_region",
+                  "--p_run_date.$": "$.result.Payload.run_date",
+                  "--p_src_databaseName.$": "$.JobInfo.Payload.var_src_db",
+                  "--p_src_tableName.$": "$.JobInfo.Payload.var_scr_table",
+                  "--p_tar_databaseName.$": "$.JobInfo.Payload.var_trg_db",
+                  "--p_tar_tablename.$": "$.JobInfo.Payload.var_trg_table"
+                }
+              },
+              "End": true,
+              "ResultPath": null,
+              "OutputPath": "$"
+            }
+          }
+        },
+        {
+          "StartAt": "Check Stg_Extract_Users job",
+          "States": {
+            "Check Stg_Extract_Users job": {
+              "Type": "Task",
+              "Resource": "arn:aws:states:::lambda:invoke",
+              "OutputPath": "$",
+              "Parameters": {
+                "FunctionName": "arn:aws:lambda:us-east-1:377414509754:function:NT_Accelerate_Is_Allow_Running:$LATEST",
+                "Payload": {
+                  "p_job_name": "jb_Stg_Extract_Users",
+                  "p_run_date.$": "$.result.Payload.run_date",
+                  "p_run_type.$": "$.result.Payload.run_type"
+                }
+              },
+              "Retry": [
+                {
+                  "ErrorEquals": [
+                    "Lambda.ServiceException",
+                    "Lambda.AWSLambdaException",
+                    "Lambda.SdkClientException"
+                  ],
+                  "IntervalSeconds": 2,
+                  "MaxAttempts": 6,
+                  "BackoffRate": 2
+                }
+              ],
+              "ResultPath": "$.JobInfo",
+              "Next": "Is Stg_Extract_Users Ran?"
+            },
+            "Is Stg_Extract_Users Ran?": {
+              "Type": "Choice",
+              "Choices": [
+                {
+                  "Variable": "$.JobInfo.Payload.is_ran",
+                  "StringEquals": "Yes",
+                  "Next": "Update Users job status is SUCCEEDED"
+                },
+                {
+                  "Variable": "$.JobInfo.Payload.is_ran",
+                  "StringEquals": "No",
+                  "Next": "Start Job jb_Stg_Extract_Users"
+                }
+              ]
+            },
+            "Update Users job status is SUCCEEDED": {
+              "Type": "Task",
+              "Resource": "arn:aws:states:::lambda:invoke",
+              "OutputPath": "$.Payload",
+              "Parameters": {
+                "FunctionName": "arn:aws:lambda:us-east-1:377414509754:function:NT_Accelerate_Update_Job_Status:$LATEST",
+                "Payload": {
+                  "JobName": "jb_Stg_Extract_Venue",
+                  "BatchId.$": "$.result.Payload.batch_id",
+                  "RunDate.$": "$.result.Payload.run_date"
+                }
+              },
+              "Retry": [
+                {
+                  "ErrorEquals": [
+                    "Lambda.ServiceException",
+                    "Lambda.AWSLambdaException",
+                    "Lambda.SdkClientException"
+                  ],
+                  "IntervalSeconds": 2,
+                  "MaxAttempts": 6,
+                  "BackoffRate": 2
+                }
+              ],
+              "End": true
+            },
+            "Start Job jb_Stg_Extract_Users": {
+              "Type": "Task",
+              "Resource": "arn:aws:states:::glue:startJobRun.sync",
+              "Parameters": {
+                "JobName": "jb_Stg_Extract_Users",
+                "Arguments": {
+                  "--p_job_name.$": "$.JobInfo.Payload.var_job_name",
+                  "--catalog_conn.$": "$.JobInfo.Payload.var_catalog_con",
+                  "--p_is_incremental_load.$": "$.JobInfo.Payload.var_incremental_load",
+                  "--p_batch_id.$": "$.result.Payload.batch_id",
+                  "--p_region.$": "$.JobInfo.Payload.var_region",
+                  "--p_run_date.$": "$.result.Payload.run_date",
+                  "--p_src_databaseName.$": "$.JobInfo.Payload.var_src_db",
+                  "--p_src_tableName.$": "$.JobInfo.Payload.var_scr_table",
+                  "--p_tar_databaseName.$": "$.JobInfo.Payload.var_trg_db",
+                  "--p_tar_tablename.$": "$.JobInfo.Payload.var_trg_table"
+                }
+              },
+              "End": true,
+              "ResultPath": null,
+              "OutputPath": "$"
+            }
+          }
+        },
+        {
+          "StartAt": "Check Stg_Extract_Event job",
+          "States": {
+            "Check Stg_Extract_Event job": {
+              "Type": "Task",
+              "Resource": "arn:aws:states:::lambda:invoke",
+              "OutputPath": "$",
+              "Parameters": {
+                "FunctionName": "arn:aws:lambda:us-east-1:377414509754:function:NT_Accelerate_Is_Allow_Running:$LATEST",
+                "Payload": {
+                  "p_job_name": "jb_Stg_Extract_Event",
+                  "p_run_date.$": "$.result.Payload.run_date",
+                  "p_run_type.$": "$.result.Payload.run_type"
+                }
+              },
+              "Retry": [
+                {
+                  "ErrorEquals": [
+                    "Lambda.ServiceException",
+                    "Lambda.AWSLambdaException",
+                    "Lambda.SdkClientException"
+                  ],
+                  "IntervalSeconds": 2,
+                  "MaxAttempts": 6,
+                  "BackoffRate": 2
+                }
+              ],
+              "ResultPath": "$.JobInfo",
+              "Next": "Is Stg_Extract_Event Ran?"
+            },
+            "Is Stg_Extract_Event Ran?": {
+              "Type": "Choice",
+              "Choices": [
+                {
+                  "Variable": "$.JobInfo.Payload.is_ran",
+                  "StringEquals": "Yes",
+                  "Next": "Update Event job status is SUCCEEDED"
+                },
+                {
+                  "Variable": "$.JobInfo.Payload.is_ran",
+                  "StringEquals": "No",
+                  "Next": "Start Job jb_Stg_Extract_Event"
+                }
+              ]
+            },
+            "Update Event job status is SUCCEEDED": {
+              "Type": "Task",
+              "Resource": "arn:aws:states:::lambda:invoke",
+              "OutputPath": "$.Payload",
+              "Parameters": {
+                "FunctionName": "arn:aws:lambda:us-east-1:377414509754:function:NT_Accelerate_Update_Job_Status:$LATEST",
+                "Payload": {
+                  "JobName": "jb_Stg_Extract_Event",
+                  "BatchId.$": "$.result.Payload.batch_id",
+                  "RunDate.$": "$.result.Payload.run_date"
+                }
+              },
+              "Retry": [
+                {
+                  "ErrorEquals": [
+                    "Lambda.ServiceException",
+                    "Lambda.AWSLambdaException",
+                    "Lambda.SdkClientException"
+                  ],
+                  "IntervalSeconds": 2,
+                  "MaxAttempts": 6,
+                  "BackoffRate": 2
+                }
+              ],
+              "End": true
+            },
+            "Start Job jb_Stg_Extract_Event": {
+              "Type": "Task",
+              "Resource": "arn:aws:states:::glue:startJobRun.sync",
+              "Parameters": {
+                "JobName": "jb_Stg_Extract_Event",
+                "Arguments": {
+                  "--p_job_name.$": "$.JobInfo.Payload.var_job_name",
+                  "--catalog_conn.$": "$.JobInfo.Payload.var_catalog_con",
+                  "--p_is_incremental_load.$": "$.JobInfo.Payload.var_incremental_load",
+                  "--p_batch_id.$": "$.result.Payload.batch_id",
+                  "--p_region.$": "$.JobInfo.Payload.var_region",
+                  "--p_run_date.$": "$.result.Payload.run_date",
+                  "--p_src_databaseName.$": "$.JobInfo.Payload.var_src_db",
+                  "--p_src_tableName.$": "$.JobInfo.Payload.var_scr_table",
+                  "--p_tar_databaseName.$": "$.JobInfo.Payload.var_trg_db",
+                  "--p_tar_tablename.$": "$.JobInfo.Payload.var_trg_table"
+                }
+              },
+              "End": true,
+              "ResultPath": null,
+              "OutputPath": "$"
+            }
+          }
+        },
+        {
+          "StartAt": "Check jb_Stg_Extract_Sales",
+          "States": {
+            "Check jb_Stg_Extract_Sales": {
+              "Type": "Task",
+              "Resource": "arn:aws:states:::lambda:invoke",
+              "OutputPath": "$",
+              "Parameters": {
+                "FunctionName": "arn:aws:lambda:us-east-1:377414509754:function:NT_Accelerate_Is_Allow_Running:$LATEST",
+                "Payload": {
+                  "p_job_name": "jb_Stg_Extract_Sales",
+                  "p_run_date.$": "$.result.Payload.run_date",
+                  "p_run_type.$": "$.result.Payload.run_type"
+                }
+              },
+              "Retry": [
+                {
+                  "ErrorEquals": [
+                    "Lambda.ServiceException",
+                    "Lambda.AWSLambdaException",
+                    "Lambda.SdkClientException"
+                  ],
+                  "IntervalSeconds": 2,
+                  "MaxAttempts": 6,
+                  "BackoffRate": 2
+                }
+              ],
+              "ResultPath": "$.JobInfo",
+              "Next": "Is Stg_Extract_Sales Ran?"
+            },
+            "Is Stg_Extract_Sales Ran?": {
+              "Type": "Choice",
+              "Choices": [
+                {
+                  "Variable": "$.JobInfo.Payload.is_ran",
+                  "StringEquals": "Yes",
+                  "Next": "Update Sales job status is SUCCEEDED"
+                },
+                {
+                  "Variable": "$.JobInfo.Payload.is_ran",
+                  "StringEquals": "No",
+                  "Next": "Start Job jb_Stg_Extract_Sales"
+                }
+              ]
+            },
+            "Update Sales job status is SUCCEEDED": {
+              "Type": "Task",
+              "Resource": "arn:aws:states:::lambda:invoke",
+              "OutputPath": "$.Payload",
+              "Parameters": {
+                "FunctionName": "arn:aws:lambda:us-east-1:377414509754:function:NT_Accelerate_Update_Job_Status:$LATEST",
+                "Payload": {
+                  "JobName": "jb_Stg_Extract_Sales",
+                  "BatchId.$": "$.result.Payload.batch_id",
+                  "RunDate.$": "$.result.Payload.run_date"
+                }
+              },
+              "Retry": [
+                {
+                  "ErrorEquals": [
+                    "Lambda.ServiceException",
+                    "Lambda.AWSLambdaException",
+                    "Lambda.SdkClientException"
+                  ],
+                  "IntervalSeconds": 2,
+                  "MaxAttempts": 6,
+                  "BackoffRate": 2
+                }
+              ],
+              "End": true
+            },
+            "Start Job jb_Stg_Extract_Sales": {
+              "Type": "Task",
+              "Resource": "arn:aws:states:::glue:startJobRun.sync",
+              "Parameters": {
+                "JobName": "jb_Stg_Extract_Sales",
+                "Arguments": {
+                  "--p_job_name.$": "$.JobInfo.Payload.var_job_name",
+                  "--catalog_conn.$": "$.JobInfo.Payload.var_catalog_con",
+                  "--p_is_incremental_load.$": "$.JobInfo.Payload.var_incremental_load",
+                  "--p_batch_id.$": "$.result.Payload.batch_id",
+                  "--p_region.$": "$.JobInfo.Payload.var_region",
+                  "--p_run_date.$": "$.result.Payload.run_date",
+                  "--p_src_databaseName.$": "$.JobInfo.Payload.var_src_db",
+                  "--p_src_tableName.$": "$.JobInfo.Payload.var_scr_table",
+                  "--p_tar_databaseName.$": "$.JobInfo.Payload.var_trg_db",
+                  "--p_tar_tablename.$": "$.JobInfo.Payload.var_trg_table"
+                }
+              },
+              "End": true,
+              "ResultPath": null,
+              "OutputPath": "$"
+            }
+          }
+        },
+        {
+          "StartAt": "Check Stg_Extract_Listing job",
+          "States": {
+            "Check Stg_Extract_Listing job": {
+              "Type": "Task",
+              "Resource": "arn:aws:states:::lambda:invoke",
+              "OutputPath": "$",
+              "Parameters": {
+                "FunctionName": "arn:aws:lambda:us-east-1:377414509754:function:NT_Accelerate_Is_Allow_Running:$LATEST",
+                "Payload": {
+                  "p_job_name": "jb_Stg_Extract_Listing",
+                  "p_run_date.$": "$.result.Payload.run_date",
+                  "p_run_type.$": "$.result.Payload.run_type"
+                }
+              },
+              "Retry": [
+                {
+                  "ErrorEquals": [
+                    "Lambda.ServiceException",
+                    "Lambda.AWSLambdaException",
+                    "Lambda.SdkClientException"
+                  ],
+                  "IntervalSeconds": 2,
+                  "MaxAttempts": 6,
+                  "BackoffRate": 2
+                }
+              ],
+              "ResultPath": "$.JobInfo",
+              "Next": "Is Stg_Extract_Listing Ran?"
+            },
+            "Is Stg_Extract_Listing Ran?": {
+              "Type": "Choice",
+              "Choices": [
+                {
+                  "Variable": "$.JobInfo.Payload.is_ran",
+                  "StringEquals": "Yes",
+                  "Next": "Update Listing job status is SUCCEEDED"
+                },
+                {
+                  "Variable": "$.JobInfo.Payload.is_ran",
+                  "StringEquals": "No",
+                  "Next": "Start Job jb_Stg_Extract_Listing"
+                }
+              ]
+            },
+            "Update Listing job status is SUCCEEDED": {
+              "Type": "Task",
+              "Resource": "arn:aws:states:::lambda:invoke",
+              "OutputPath": "$.Payload",
+              "Parameters": {
+                "FunctionName": "arn:aws:lambda:us-east-1:377414509754:function:NT_Accelerate_Update_Job_Status:$LATEST",
+                "Payload": {
+                  "JobName": "jb_Stg_Extract_Listing",
+                  "BatchId.$": "$.result.Payload.batch_id",
+                  "RunDate.$": "$.result.Payload.run_date"
+                }
+              },
+              "Retry": [
+                {
+                  "ErrorEquals": [
+                    "Lambda.ServiceException",
+                    "Lambda.AWSLambdaException",
+                    "Lambda.SdkClientException"
+                  ],
+                  "IntervalSeconds": 2,
+                  "MaxAttempts": 6,
+                  "BackoffRate": 2
+                }
+              ],
+              "End": true
+            },
+            "Start Job jb_Stg_Extract_Listing": {
+              "Type": "Task",
+              "Resource": "arn:aws:states:::glue:startJobRun.sync",
+              "Parameters": {
+                "JobName": "jb_Stg_Extract_Listing",
+                "Arguments": {
+                  "--p_job_name.$": "$.JobInfo.Payload.var_job_name",
+                  "--catalog_conn.$": "$.JobInfo.Payload.var_catalog_con",
+                  "--p_is_incremental_load.$": "$.JobInfo.Payload.var_incremental_load",
+                  "--p_batch_id.$": "$.result.Payload.batch_id",
+                  "--p_region.$": "$.JobInfo.Payload.var_region",
+                  "--p_run_date.$": "$.result.Payload.run_date",
+                  "--p_src_databaseName.$": "$.JobInfo.Payload.var_src_db",
+                  "--p_src_tableName.$": "$.JobInfo.Payload.var_scr_table",
+                  "--p_tar_databaseName.$": "$.JobInfo.Payload.var_trg_db",
+                  "--p_tar_tablename.$": "$.JobInfo.Payload.var_trg_table"
+                }
+              },
+              "End": true,
+              "ResultPath": null,
+              "OutputPath": "$"
+            }
+          }
+        }
+      ],
+      "ResultPath": "$.staging",
+      "Next": "Update MasterJob SUCCEEDED",
+      "OutputPath": "$",
+      "Catch": [
+        {
+          "ErrorEquals": [
+            "States.ALL"
+          ],
+          "Next": "Update Master Job Failed for failed job"
+        }
+      ]
+    },
+    "Update MasterJob SUCCEEDED": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "OutputPath": "$",
+      "Parameters": {
+        "FunctionName": "arn:aws:lambda:us-east-1:377414509754:function:NT_Accelerate_Update_MasterJob_Status:$LATEST",
+        "Payload": {
+          "p_masterjob_id": 1,
+          "p_run_date.$": "$.result.Payload.run_date",
+          "p_status": "SUCCEEDED"
+        }
+      },
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "Lambda.ServiceException",
+            "Lambda.AWSLambdaException",
+            "Lambda.SdkClientException"
+          ],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 6,
+          "BackoffRate": 2
+        }
+      ],
+      "Next": "Send mail",
+      "ResultPath": null
+    },
+    "Update Master Job Failed for failed job": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "OutputPath": "$",
+      "Parameters": {
+        "FunctionName": "arn:aws:lambda:us-east-1:377414509754:function:NT_Accelerate_Update_MasterJob_Status:$LATEST",
+        "Payload": {
+          "p_masterjob_id": 1,
+          "p_run_date.$": "$.result.Payload.run_date",
+          "p_status": "FAILED"
+        }
+      },
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "Lambda.ServiceException",
+            "Lambda.AWSLambdaException",
+            "Lambda.SdkClientException"
+          ],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 6,
+          "BackoffRate": 2
+        }
+      ],
+      "Next": "Send Mail for Staging Jobs failed",
+      "ResultPath": null
+    },
+    "Send Mail for Staging Jobs failed": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "OutputPath": "$.Payload",
+      "Parameters": {
+        "Payload.$": "$",
+        "FunctionName": "arn:aws:lambda:us-east-1:377414509754:function:NT_Accelerate_Send_Mail:$LATEST"
+      },
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "Lambda.ServiceException",
+            "Lambda.AWSLambdaException",
+            "Lambda.SdkClientException"
+          ],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 6,
+          "BackoffRate": 2
+        }
+      ],
+      "End": true
+    },
+    "Send mail": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "OutputPath": "$.Payload",
+      "Parameters": {
+        "Payload.$": "$",
+        "FunctionName": "arn:aws:lambda:us-east-1:377414509754:function:NT_Accelerate_Send_Mail:$LATEST"
+      },
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "Lambda.ServiceException",
+            "Lambda.AWSLambdaException",
+            "Lambda.SdkClientException"
+          ],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 6,
+          "BackoffRate": 2
+        }
+      ],
+      "End": true
+    }
+  }
+}
