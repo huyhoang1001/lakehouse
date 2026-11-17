@@ -31,7 +31,7 @@ resource "aws_glue_job" "full_load" {
   worker_type       = "G.1X"
   number_of_workers = 2
   max_retries       = 0
-  timeout           = 15
+  timeout           = 30
   connections       = [aws_glue_connection.conRDS_tickit.name]
 
   command {
@@ -72,7 +72,7 @@ resource "aws_glue_job" "sales" {
   worker_type       = "G.1X"
   number_of_workers = 2
   max_retries       = 0
-  timeout           = 15
+  timeout           = 30
   connections       = [aws_glue_connection.conRDS_tickit.name]
 
   command {
@@ -116,7 +116,7 @@ resource "aws_glue_job" "excel_file" {
   worker_type       = "G.1X"
   number_of_workers = 2
   max_retries       = 0
-  timeout           = 15
+  timeout           = 30
 
   command {
     name            = "glueetl"

@@ -3,13 +3,14 @@
 # Seeds the RDS SQL Server Express instance with the Tickit database schema
 # and sample data using scripts/batch_seed.py.
 #
-# batch_seed.py is faster than raw sqlcmd -i because it:
-#   1. Wraps every TRANSACTION_SIZE (500) rows in a single BEGIN/COMMIT block,
-#      reducing commit overhead by ~500×.
-#   2. Runs each transaction as a separate sqlcmd invocation so SQL Server
-#      releases memory between calls (avoids OOM on db.t3.micro).
-#   3. Supports resume: checks existing row count before starting, skips
-#      tables that are already fully seeded.
+# batch_seed.py rewrites the ~424k single-row INSERTs before loading:
+#   1. 200 rows per INSERT ... VALUES (...), (...), so SQL Server parses
+#      ~2k statements instead of ~424k (the previous single-row load did
+#      not reliably finish in 5 minutes on db.t3.micro).
+#   2. COMMIT every 2000 rows, one sqlcmd process per table.
+#   3. Resume is per table: matching COUNT(*) skips the table; a partial
+#      heap is truncated and reloaded (there is no key to resume by row).
+#   4. The process exits non-zero if a table count does not match the script.
 #
 # Prerequisites:
 #   - sqlcmd must be installed (brew install sqlcmd)
