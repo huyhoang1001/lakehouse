@@ -1,23 +1,24 @@
 # rds_seed.tf
 # -----------------------------------------------------------------------------
 # Seeds the RDS SQL Server Express instance with the Tickit database schema
-# and sample data using the provided tickit_script.sql.
+# and sample data using scripts/batch_seed.py.
+#
+# batch_seed.py is faster than raw sqlcmd -i because it:
+#   1. Wraps every TRANSACTION_SIZE (500) rows in a single BEGIN/COMMIT block,
+#      reducing commit overhead by ~500×.
+#   2. Runs each transaction as a separate sqlcmd invocation so SQL Server
+#      releases memory between calls (avoids OOM on db.t3.micro).
+#   3. Supports resume: checks existing row count before starting, skips
+#      tables that are already fully seeded.
 #
 # Prerequisites:
-#   sqlcmd must be installed on the machine running `terraform apply`.
-#   macOS: brew install sqlcmd
-#   Linux: install via Microsoft mssql-tools package
+#   - sqlcmd must be installed (brew install sqlcmd)
+#   - The tickit_script.sql must be a real file, not a Git LFS pointer.
+#     Run: git lfs pull --include="instruction/day1/tickit_db 2/..."
 #
-# Tasks 6.1 and 6.2:
-#   - null_resource with local-exec to run sqlcmd (task 6.1)
-#   - triggers on filesha256() for change detection (task 6.2)
-#   - idempotency guard: creates the tickit DB if absent, then checks
-#     sys.tables row count inside tickit before running the script (task 6.2)
-#
-# Note: tickit_script.sql begins with USE [tickit], so the tickit database
-# must exist before the script runs. This provisioner creates it if absent.
 # The sg_rds security group allows TCP 1433 from the local machine's public
-# IP (detected dynamically in networking.tf) so sqlcmd can reach RDS.
+# IP (detected dynamically via data.http.my_ip in networking.tf), so sqlcmd
+# can reach RDS during terraform apply without manual SG edits.
 # -----------------------------------------------------------------------------
 
 resource "null_resource" "db_seed" {
@@ -31,25 +32,31 @@ resource "null_resource" "db_seed" {
       USER="${var.db_username}"
       PASS="${var.db_password}"
       SCRIPT="${path.module}/../instruction/day1/tickit_db 2/tickit_db/tickit_script.sql"
+      SEED_PY="${path.module}/scripts/batch_seed.py"
 
-      # Step 1: Create the tickit database if it does not exist.
-      sqlcmd -S "$RDS" -U "$USER" -P "$PASS" \
-        -Q "IF NOT EXISTS (SELECT name FROM sys.databases WHERE name = 'tickit') CREATE DATABASE tickit;" 2>&1
-
-      # Step 2: Count the 7 expected Tickit tables inside the tickit database.
-      TABLE_COUNT=$(sqlcmd -S "$RDS" -U "$USER" -P "$PASS" -d tickit \
-        -Q "SET NOCOUNT ON; SELECT COUNT(*) FROM sys.tables WHERE name IN ('category','date','event','listing','sales','users','venue') AND OBJECT_SCHEMA_NAME(object_id) = 'dbo';" \
-        -h -1 2>/dev/null | tr -d '[:space:]' | grep -E '^[0-9]+$' | head -1)
-
-      echo "Tickit table count: $TABLE_COUNT"
-
-      if [ "$TABLE_COUNT" = "7" ]; then
-        echo "All 7 Tickit tables already exist — skipping seed."
-      else
-        echo "Seeding RDS with tickit_script.sql..."
-        sqlcmd -S "$RDS" -U "$USER" -P "$PASS" -d tickit -i "$SCRIPT"
-        echo "Seed complete."
+      # Verify sqlcmd is available
+      if ! command -v sqlcmd &>/dev/null; then
+        echo "ERROR: sqlcmd not found. Install with: brew install sqlcmd"
+        exit 1
       fi
+
+      # Verify the SQL script is real content, not a Git LFS pointer
+      if head -1 "$SCRIPT" | grep -q "^version https://git-lfs"; then
+        echo "ERROR: tickit_script.sql is a Git LFS pointer, not the real file."
+        echo "Run: git lfs pull --include=\"instruction/day1/tickit_db 2/tickit_db/tickit_script.sql\""
+        exit 1
+      fi
+
+      # Create the tickit database if it does not exist
+      sqlcmd -S "$RDS" -U "$USER" -P "$PASS" \
+        -Q "IF NOT EXISTS (SELECT name FROM sys.databases WHERE name='tickit') CREATE DATABASE tickit;" 2>&1
+
+      # Seed using the batch script (transaction-batched, resume-aware)
+      python3 "$SEED_PY" \
+        --server "$RDS" \
+        --user   "$USER" \
+        --password "$PASS" \
+        --script "$SCRIPT"
     EOT
     interpreter = ["bash", "-c"]
   }
