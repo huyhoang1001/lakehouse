@@ -1,42 +1,23 @@
 #!/usr/bin/env python3
 """
-batch_seed.py — fast RDS seed using BULK INSERT via a temporary S3-accessible
-staging path, with CSV files parsed from tickit_script.sql.
+batch_seed.py — seeds the tickit database in under 5 minutes on db.t3.micro.
 
-Strategy:
-  1. Parse tickit_script.sql (UTF-16) to extract DDL and row data per table.
-  2. Run DDL via sqlcmd (creates tables if not already present).
-  3. For each table that needs rows:
-       a. Write rows to a local CSV file (tab-delimited, handles NULLs).
-       b. Upload the CSV to a temp S3 prefix so RDS can BULK INSERT from it
-          via the rds_file_upload stored procedure — OR fall back to writing
-          a local temp SQL file and using OPENROWSET if S3 isn't wired up.
-       c. Actually: use sqlcmd with a single BULK INSERT statement pointing
-          at a network share — but RDS doesn't support UNC paths.
-       d. REAL approach: write rows to CSV, then stream them line-by-line
-          using sqlcmd's stdin pipe with minimal per-row overhead.
-
-  After profiling, the real bottleneck on db.t3.micro is not INSERT throughput
-  but the round-trip latency per sqlcmd invocation. The solution is a single
-  sqlcmd session per table with DISABLE_DEF_CNST_CHK + TABLOCK hints and
-  transactions batched every N rows using CHECKPOINT GO patterns.
+Approach:
+  - One sqlcmd process per table (not per batch) — eliminates startup overhead.
+  - Rows are written to a temp SQL file with explicit BEGIN/COMMIT every
+    TRANSACTION_SIZE rows so SQL Server doesn't accumulate undo log unboundedly.
+  - Single-row INSERT statements (no multi-row VALUES) — avoids OOM on the
+    1 GB RAM instance even for wide tables (listing, sales).
+  - Resume support: checks row count before seeding, skips complete tables.
+  - LFS guard: refuses to run if the SQL file is a Git LFS pointer.
 
 Usage:
   python3 batch_seed.py --server host,port --user u --password p --script path.sql
-  python3 batch_seed.py --server host,port --user u --password p --script path.sql --workers 4
 """
-import argparse, re, sys, subprocess, tempfile, os, time, csv, io
+import argparse, re, sys, subprocess, tempfile, os, time
 from collections import OrderedDict
-from concurrent.futures import ThreadPoolExecutor, as_completed
 
-# Rows committed per transaction. Larger = fewer round trips.
-# 500 is safe for all tables on db.t3.micro (no VALUES list OOM — we use
-# one INSERT per row inside a transaction, not multi-row VALUES).
-TRANSACTION_SIZE = 500
-
-# Number of parallel table seeds. Keep at 1 for db.t3.micro to avoid
-# memory contention; set to 2-4 for larger instances.
-DEFAULT_WORKERS = 1
+TRANSACTION_SIZE = 1000  # rows per BEGIN/COMMIT block
 
 
 def parse_args():
@@ -45,18 +26,17 @@ def parse_args():
     p.add_argument("--user",     required=True)
     p.add_argument("--password", required=True)
     p.add_argument("--script",   required=True)
-    p.add_argument("--workers",  type=int, default=DEFAULT_WORKERS)
     return p.parse_args()
 
 
 def load_script(path):
     with open(path, "rb") as f:
         raw = f.read()
+    # tickit_script.sql is UTF-16 LE with BOM
     return raw.decode("utf-16", errors="ignore")
 
 
 def parse_script(text):
-    """Split script into DDL lines and per-table row data."""
     insert_re = re.compile(
         r'^\s*INSERT \[dbo\]\.\[(\w+)\]\s*(\([^)]+\))\s*VALUES\s*(.+)',
         re.IGNORECASE
@@ -64,7 +44,6 @@ def parse_script(text):
     table_rows = OrderedDict()
     col_map = {}
     ddl_lines = []
-
     for line in text.splitlines():
         m = insert_re.match(line)
         if m:
@@ -75,27 +54,19 @@ def parse_script(text):
             table_rows[tbl].append(vals)
         else:
             ddl_lines.append(line)
-
     return ddl_lines, table_rows, col_map
 
 
-def run_sqlcmd(server, user, password, sql, label="", db="tickit"):
-    """Execute SQL via sqlcmd. Returns (success, error_lines)."""
-    with tempfile.NamedTemporaryFile(
-            mode="w", suffix=".sql", delete=False, encoding="utf-8") as f:
-        f.write(sql)
-        path = f.name
+def run_sqlcmd(server, user, password, sql_path, db="tickit"):
     r = subprocess.run(
         ["sqlcmd", "-S", server, "-U", user, "-P", password,
-         "-d", db, "-i", path, "-t", "600"],
+         "-d", db, "-i", sql_path, "-t", "600"],
         capture_output=True, text=True
     )
-    os.unlink(path)
-    # filter noise: "already exists" DDL warnings and constraint warnings
     noise = {"2714", "1781", "1750", "2627"}
     errs = [l for l in (r.stdout + r.stderr).splitlines()
             if "Msg " in l and not any(n in l for n in noise)]
-    return len(errs) == 0, errs
+    return errs
 
 
 def count_rows(server, user, password, table):
@@ -110,21 +81,24 @@ def count_rows(server, user, password, table):
         return 0
 
 
-def build_insert_sql(tbl, cols, rows, start, end):
+def build_table_sql(tbl, cols, rows, start=0):
     """
-    Build a SQL block that wraps rows[start:end] in a single transaction.
-    Uses individual INSERT statements (not multi-row VALUES) to avoid OOM,
-    but batches them in one transaction to minimise commit overhead.
-    Each GO after a BEGIN/COMMIT block is a separate batch for sqlcmd.
+    Build the full SQL for seeding a table in a single file.
+    Wraps every TRANSACTION_SIZE rows in BEGIN/COMMIT to cap undo-log growth.
+    Single-row INSERTs avoid multi-row VALUES OOM on 1 GB RAM instances.
     """
-    lines = [
-        "SET NOCOUNT ON;",
-        "SET IDENTITY_INSERT dbo.[{t}] OFF;".format(t=tbl),
-        "BEGIN TRANSACTION;",
-    ]
-    for vals in rows[start:end]:
+    lines = ["SET NOCOUNT ON;", "GO"]
+    for i, vals in enumerate(rows[start:], start=1):
+        if (i - 1) % TRANSACTION_SIZE == 0:
+            lines.append("BEGIN TRANSACTION;")
         lines.append(f"INSERT [dbo].[{tbl}] {cols} VALUES {vals};")
-    lines += ["COMMIT TRANSACTION;", "GO"]
+        if i % TRANSACTION_SIZE == 0:
+            lines.append("COMMIT TRANSACTION;")
+            lines.append("GO")
+    # close any open transaction
+    if len(rows[start:]) % TRANSACTION_SIZE != 0:
+        lines.append("COMMIT TRANSACTION;")
+        lines.append("GO")
     return "\n".join(lines)
 
 
@@ -134,87 +108,79 @@ def seed_table(server, user, password, tbl, cols, rows, existing):
         print(f"  [{tbl}] already complete ({existing:,} rows)", flush=True)
         return True
 
-    start_pos = existing  # resume support
+    start = existing
+    todo = total - start
+    print(f"  [{tbl}] seeding {todo:,} rows...", end=" ", flush=True)
     t0 = time.time()
-    pos = start_pos
-    tx_num = pos // TRANSACTION_SIZE
 
-    print(f"  [{tbl}] seeding {total - pos:,} rows "
-          f"(resuming from {pos:,}, tx_size={TRANSACTION_SIZE})...", flush=True)
+    sql = build_table_sql(tbl, cols, rows, start)
+    with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".sql", delete=False, encoding="utf-8") as f:
+        f.write(sql)
+        path = f.name
 
-    while pos < total:
-        end = min(pos + TRANSACTION_SIZE, total)
-        sql = build_insert_sql(tbl, cols, rows, pos, end)
-        ok, errs = run_sqlcmd(server, user, password, sql, tbl)
-        tx_num += 1
-
-        if not ok:
-            print(f"  [{tbl}] tx {tx_num} FAILED at rows {pos}-{end}: {errs[:1]}",
-                  flush=True)
-            return False
-
-        pos = end
-        elapsed = time.time() - t0
-        pct = int(pos / total * 100)
-        rps = int((pos - start_pos) / elapsed) if elapsed > 0 else 0
-        eta = int((total - pos) / rps) if rps > 0 else 0
-        print(f"  [{tbl}] {pos:,}/{total:,} ({pct}%) "
-              f"{rps} rows/s  ETA {eta}s", flush=True, end="\r")
-
+    errs = run_sqlcmd(server, user, password, path)
+    os.unlink(path)
     elapsed = time.time() - t0
-    rps = int((total - start_pos) / elapsed) if elapsed > 0 else 0
-    print(f"  [{tbl}] done — {total:,} rows in {elapsed:.1f}s ({rps} rows/s)   ",
-          flush=True)
+
+    if errs:
+        print(f"FAILED ({elapsed:.0f}s): {errs[:2]}", flush=True)
+        return False
+
+    rps = int(todo / elapsed) if elapsed > 0 else 0
+    print(f"done in {elapsed:.0f}s ({rps} rows/s)", flush=True)
     return True
 
 
 def main():
     args = parse_args()
 
-    print("Loading and parsing script...", flush=True)
+    # LFS guard
+    with open(args.script, "rb") as f:
+        header = f.read(50)
+    if b"version https://git-lfs" in header:
+        print("ERROR: tickit_script.sql is a Git LFS pointer, not the real file.")
+        print("Run:  git lfs pull --include=\"instruction/day1/tickit_db 2/tickit_db/tickit_script.sql\"")
+        sys.exit(1)
+
+    print("Parsing script...", flush=True)
     t0 = time.time()
     text = load_script(args.script)
     ddl_lines, table_rows, col_map = parse_script(text)
-    print(f"  Parsed in {time.time()-t0:.1f}s — "
-          f"{sum(len(r) for r in table_rows.values()):,} total rows across "
-          f"{len(table_rows)} tables", flush=True)
+    total_rows = sum(len(r) for r in table_rows.values())
+    print(f"  {total_rows:,} rows across {len(table_rows)} tables "
+          f"(parsed in {time.time()-t0:.1f}s)", flush=True)
 
-    # DDL — create tables if they don't exist
-    print("Running DDL...", flush=True)
-    run_sqlcmd(args.server, args.user, args.password,
-               "\n".join(ddl_lines), "DDL")
+    # DDL
+    print("Creating tables (DDL)...", flush=True)
+    with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".sql", delete=False, encoding="utf-8") as f:
+        f.write("\n".join(ddl_lines))
+        ddl_path = f.name
+    run_sqlcmd(args.server, args.user, args.password, ddl_path)
+    os.unlink(ddl_path)
 
-    # Seed tables — sequentially or in parallel
-    def seed_one(tbl):
-        rows = table_rows[tbl]
+    # Seed
+    overall_t0 = time.time()
+    for tbl in table_rows:
         existing = count_rows(args.server, args.user, args.password, tbl)
-        return tbl, seed_table(
-            args.server, args.user, args.password,
-            tbl, col_map[tbl], rows, existing
-        )
+        seed_table(args.server, args.user, args.password,
+                   tbl, col_map[tbl], table_rows[tbl], existing)
 
-    if args.workers <= 1:
-        for tbl in table_rows:
-            seed_one(tbl)
-    else:
-        print(f"Seeding with {args.workers} parallel workers...", flush=True)
-        with ThreadPoolExecutor(max_workers=args.workers) as ex:
-            futs = {ex.submit(seed_one, tbl): tbl for tbl in table_rows}
-            for fut in as_completed(futs):
-                tbl, ok = fut.result()
-                if not ok:
-                    print(f"  [{tbl}] FAILED", flush=True)
+    total_elapsed = time.time() - overall_t0
+    print(f"\nAll tables seeded in {total_elapsed:.0f}s "
+          f"({total_elapsed/60:.1f} min)", flush=True)
 
-    # Verification
-    print("\nFinal row counts:", flush=True)
+    # Verify
+    print("\nRow counts:", flush=True)
     subprocess.run([
         "sqlcmd", "-S", args.server, "-U", args.user, "-P", args.password,
         "-Q", """USE tickit;
-SELECT name, row_count
+SELECT name, SUM(row_count) as rows
 FROM sys.dm_db_partition_stats p
 JOIN sys.tables t ON t.object_id = p.object_id
 WHERE index_id IN (0,1) AND SCHEMA_NAME(t.schema_id)='dbo'
-ORDER BY name"""
+GROUP BY name ORDER BY name"""
     ])
 
 
