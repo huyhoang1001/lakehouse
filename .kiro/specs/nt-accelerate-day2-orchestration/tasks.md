@@ -34,19 +34,19 @@ All code written here is Terraform HCL — no Python code is modified. Lambda so
     - Grant CloudWatch Logs permissions for Step Functions log delivery
     - _Requirements: 4.1, 4.2, 4.3, 4.4_
 
-- [ ] 3. Deploy Lambda functions
-  - [ ] 3.1 Create `lambda.tf` with `data "archive_file"` resources for nine Lambda functions
+- [x] 3. Deploy Lambda functions
+  - [x] 3.1 Create `lambda.tf` with `data "archive_file"` resources for nine Lambda functions
     - Define one `data "archive_file"` per Lambda, sourcing from `instruction/day2/Day 2 source 2/Day 2 source/Lambda/<function>.py`
     - Output type: `zip`
     - _Requirements: 2.2_
   
-  - [ ] 3.2 Add S3 upload resources for Lambda ZIPs
+  - [x] 3.2 Add S3 upload resources for Lambda ZIPs
     - Write nine `aws_s3_object` resources uploading each ZIP to `s3://<bucket>/lambda/<function>.zip`
     - Use `source = data.archive_file.<name>.output_path`
     - Use `etag = filemd5(data.archive_file.<name>.output_path)` to trigger updates on source change
     - _Requirements: 2.4_
   
-  - [ ] 3.3 Add `aws_lambda_function` resources
+  - [x] 3.3 Add `aws_lambda_function` resources
     - Create nine `aws_lambda_function` resources
     - Runtime: `python3.9`
     - Role: `aws_iam_role.lambda.arn`
@@ -55,77 +55,77 @@ All code written here is Terraform HCL — no Python code is modified. Lambda so
     - Timeout: `60` seconds
     - _Requirements: 2.1, 2.3, 2.5_
 
-- [ ] 4. Provision DynamoDB tables for Day 2
-  - [ ] 4.1 Create `dynamodb.tf` with `NT_Accelerate_MASTER_JOB_CONFIG`
+- [x] 4. Provision DynamoDB tables for Day 2
+  - [x] 4.1 Create `dynamodb.tf` with `NT_Accelerate_MASTER_JOB_CONFIG`
     - Hash key: `ID` (N)
     - Billing mode: `PAY_PER_REQUEST`
     - _Requirements: 5.1_
   
-  - [ ] 4.2 Seed MASTER_JOB_CONFIG with `aws_dynamodb_table_item`
+  - [x] 4.2 Seed MASTER_JOB_CONFIG with `aws_dynamodb_table_item`
     - Item: `{ID:1, RUN_TYPE:NEW, RERUN_DATE:2024-01-01, BATCH_ID:0, LAST_RUN_DATE:2024-01-01, LAST_RUN_STATUS:NEW}`
     - Use `jsonencode` to construct DynamoDB item JSON
     - _Requirements: 5.2_
   
-  - [ ] 4.3 Add `NT_Accelerate_Mail_Config` table to `dynamodb.tf`
+  - [x] 4.3 Add `NT_Accelerate_Mail_Config` table to `dynamodb.tf`
     - Hash key: `ID` (N)
     - Billing mode: `PAY_PER_REQUEST`
     - _Requirements: 5.3_
   
-  - [ ] 4.4 Seed Mail_Config with placeholder `aws_dynamodb_table_item`
+  - [x] 4.4 Seed Mail_Config with placeholder `aws_dynamodb_table_item`
     - Item: `{ID:1, SENDER:var.ses_sender_email, RECEIVER:[var.ses_receiver_emails]}`
     - Use `jsonencode` with DynamoDB List (L) syntax for RECEIVER
     - _Requirements: 5.4_
   
-  - [ ] 4.5 Add JOB_CONFIG extension items to `dynamodb.tf`
+  - [x] 4.5 Add JOB_CONFIG extension items to `dynamodb.tf`
     - Create seven `aws_dynamodb_table_item` resources targeting the Day 1 `NT_Accelerate_JOB_CONFIG` table
     - Each item includes all Day 1 columns (`ID`, `JOB_NAME`, `p_src_tableName`, `p_tar_tablename`, `p_is_incremental_load`, `p_region`, `p_src_databaseName`, `p_tar_databaseName`, `p_catalog_conn`) plus new columns (`LAYER`, `MULTIPLE_RUN`, `CATALOG_CON`, `LAKEHOUSE_LOCATION`, `POSTSCRIPT`, `PRESCRIPT`, `TEMP_FOLDER`)
     - Set `LAYER=STAGING`, `MULTIPLE_RUN=FALSE`, `CATALOG_CON=conRDS_tickit`, empty strings for the others
     - _Requirements: 6.1, 6.2, 6.3, 6.4_
 
-- [ ] 5. Deploy Step Functions state machines
-  - [ ] 5.1 Create `sfn.tf` and load Step Functions JSON definitions with ARN substitution
+- [x] 5. Deploy Step Functions state machines
+  - [x] 5.1 Create `sfn.tf` and load Step Functions JSON definitions with ARN substitution
     - Use `templatefile` or `replace` to substitute hardcoded account ID `377414509754` with `data.aws_caller_identity.current.account_id`
     - Replace Lambda ARN stems with `aws_lambda_function.<name>.arn`
     - Store the processed definition in a local variable per state machine
     - _Requirements: 7.2, 7.3, 7.4_
   
-  - [ ] 5.2 Add three `aws_sfn_state_machine` resources
+  - [x] 5.2 Add three `aws_sfn_state_machine` resources
     - Names: `NT_Accelerate_Datalake_Master_Job`, `NT_Accelerate_LakeHouse_Master_Job`, `NT_Accelerate_RedshiftDW_Master_Job`
     - Definition: the processed JSON from task 5.1
     - Role ARN: `aws_iam_role.sfn.arn`
     - Type: `STANDARD`
     - _Requirements: 7.1, 7.6_
   
-  - [ ] 5.3 Add CloudWatch log group for Step Functions
+  - [x] 5.3 Add CloudWatch log group for Step Functions
     - Resource: `aws_cloudwatch_log_group` with name `/aws/states/NT_Accelerate_Datalake_Master_Job`
     - Retention: `7` days (configurable via variable)
     - Configure `logging_configuration` block in each `aws_sfn_state_machine` with `log_destination = aws_cloudwatch_log_group.<name>.arn`, `level = ERROR`
     - _Requirements: 7.5_
 
-- [ ] 6. Configure SES email identities
-  - [ ] 6.1 Create `ses.tf` with sender identity
+- [x] 6. Configure SES email identities
+  - [x] 6.1 Create `ses.tf` with sender identity
     - Resource: `aws_ses_email_identity` for `var.ses_sender_email`
     - _Requirements: 11.1_
   
-  - [ ] 6.2 Add receiver identities
+  - [x] 6.2 Add receiver identities
     - Use `for_each = toset(var.ses_receiver_emails)` to create one `aws_ses_email_identity` per receiver address
     - _Requirements: 11.1_
   
-  - [ ] 6.3 Write module README documenting SES sandbox verification requirement
+  - [x] 6.3 Write module README documenting SES sandbox verification requirement
     - Create `infra/day2/README.md` with section "SES Configuration" explaining that both sender and receiver must click verification emails in sandbox mode
     - _Requirements: 11.2, 11.3_
 
-- [ ] 7. Add optional EventBridge schedule
-  - [ ] 7.1 Create `eventbridge.tf` with conditional schedule rule
+- [x] 7. Add optional EventBridge schedule
+  - [x] 7.1 Create `eventbridge.tf` with conditional schedule rule
     - Use `count = var.enable_schedule ? 1 : 0` on `aws_cloudwatch_event_rule` with daily cron expression `cron(0 8 * * ? *)` (8 AM UTC daily, adjust as needed)
     - _Requirements: 12.1_
   
-  - [ ] 7.2 Add event target and IAM role
+  - [x] 7.2 Add event target and IAM role
     - Resource: `aws_cloudwatch_event_target` pointing to `aws_sfn_state_machine.staging.arn`
     - IAM role: trust `events.amazonaws.com`, grant `states:StartExecution` on the Staging Master Job ARN
     - _Requirements: 12.2_
 
-- [ ] 8. Write module outputs
+- [x] 8. Write module outputs
   - Create `infra/day2/outputs.tf` exposing:
     - Lambda function ARNs (map keyed by function name)
     - Step Functions state machine ARNs (map keyed by machine name)

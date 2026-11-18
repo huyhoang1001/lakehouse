@@ -48,6 +48,12 @@ variable "enable_schedule" {
   default     = false
 }
 
+variable "sfn_log_retention_days" {
+  description = "Retention period (days) for the Step Functions CloudWatch log groups."
+  type        = number
+  default     = 7
+}
+
 variable "tags" {
   description = "Tags applied to all Day 2 resources."
   type        = map(string)

@@ -26,6 +26,125 @@
         "chatSessionId": "sess_3352d99a-7790-4550-ab7b-c9b902721fb0",
         "timestamp": 1794978986643
       }
+    ],
+    "3.1 Create `lambda.tf` with `data \"archive_file\"` resources for nine Lambda functions": [
+      {
+        "executionId": "9eb8e3ea-4130-4802-a778-67a45eb1195d",
+        "chatSessionId": "sess_b39c2d80-4247-4d99-8a50-7d5b341b5a1b",
+        "timestamp": 1794992992000
+      }
+    ],
+    "3.2 Add S3 upload resources for Lambda ZIPs": [
+      {
+        "executionId": "bdb14e92-de4b-421b-b966-3603a0f9db5b",
+        "chatSessionId": "sess_b39c2d80-4247-4d99-8a50-7d5b341b5a1b",
+        "timestamp": 1794992992000
+      }
+    ],
+    "3.3 Add `aws_lambda_function` resources": [
+      {
+        "executionId": "5c574046-2549-4344-84ba-8501a3c0a411",
+        "chatSessionId": "sess_b39c2d80-4247-4d99-8a50-7d5b341b5a1b",
+        "timestamp": 1794992992000
+      }
+    ],
+    "4.1 Create `dynamodb.tf` with `NT_Accelerate_MASTER_JOB_CONFIG`": [
+      {
+        "executionId": "ea117333-3479-4231-a72c-decaab88c42c",
+        "chatSessionId": "sess_b39c2d80-4247-4d99-8a50-7d5b341b5a1b",
+        "timestamp": 1794992992000
+      }
+    ],
+    "4.2 Seed MASTER_JOB_CONFIG with `aws_dynamodb_table_item`": [
+      {
+        "executionId": "154a49e8-91d3-46b3-9e50-26686bdc6077",
+        "chatSessionId": "sess_b39c2d80-4247-4d99-8a50-7d5b341b5a1b",
+        "timestamp": 1794992992000
+      }
+    ],
+    "4.3 Add `NT_Accelerate_Mail_Config` table to `dynamodb.tf`": [
+      {
+        "executionId": "4bbc016c-745c-4191-b6e2-cd7c192385d3",
+        "chatSessionId": "sess_b39c2d80-4247-4d99-8a50-7d5b341b5a1b",
+        "timestamp": 1794992992000
+      }
+    ],
+    "4.4 Seed Mail_Config with placeholder `aws_dynamodb_table_item`": [
+      {
+        "executionId": "baee4051-f7ee-4afc-bc0c-a4aada51171e",
+        "chatSessionId": "sess_b39c2d80-4247-4d99-8a50-7d5b341b5a1b",
+        "timestamp": 1794992992000
+      }
+    ],
+    "4.5 Add JOB_CONFIG extension items to `dynamodb.tf`": [
+      {
+        "executionId": "3555a107-b064-4aa9-89fd-0366de57d248",
+        "chatSessionId": "sess_b39c2d80-4247-4d99-8a50-7d5b341b5a1b",
+        "timestamp": 1794992992000
+      }
+    ],
+    "5.1 Create `sfn.tf` and load Step Functions JSON definitions with ARN substitution": [
+      {
+        "executionId": "6a855149-2476-4497-b105-239cbc1d76d0",
+        "chatSessionId": "sess_b39c2d80-4247-4d99-8a50-7d5b341b5a1b",
+        "timestamp": 1794992992000
+      }
+    ],
+    "5.2 Add three `aws_sfn_state_machine` resources": [
+      {
+        "executionId": "a883fc4c-635b-4400-b841-06e88bd9dc2e",
+        "chatSessionId": "sess_b39c2d80-4247-4d99-8a50-7d5b341b5a1b",
+        "timestamp": 1794992992000
+      }
+    ],
+    "5.3 Add CloudWatch log group for Step Functions": [
+      {
+        "executionId": "083d9e09-7862-4e6a-92b5-3aea07fcebb5",
+        "chatSessionId": "sess_b39c2d80-4247-4d99-8a50-7d5b341b5a1b",
+        "timestamp": 1794992992000
+      }
+    ],
+    "6.1 Create `ses.tf` with sender identity": [
+      {
+        "executionId": "f5626807-bb5c-41bc-b9b5-61a9b8416439",
+        "chatSessionId": "sess_b39c2d80-4247-4d99-8a50-7d5b341b5a1b",
+        "timestamp": 1794992992000
+      }
+    ],
+    "6.2 Add receiver identities": [
+      {
+        "executionId": "dd5d5d67-8cc2-4e1b-ac8b-0fe4615d590a",
+        "chatSessionId": "sess_b39c2d80-4247-4d99-8a50-7d5b341b5a1b",
+        "timestamp": 1794992992000
+      }
+    ],
+    "6.3 Write module README documenting SES sandbox verification requirement": [
+      {
+        "executionId": "2af09afb-fb59-4f2e-827d-bd46f250c67a",
+        "chatSessionId": "sess_b39c2d80-4247-4d99-8a50-7d5b341b5a1b",
+        "timestamp": 1794992992000
+      }
+    ],
+    "7.1 Create `eventbridge.tf` with conditional schedule rule": [
+      {
+        "executionId": "d1a00e22-bf93-444f-bb54-8f24c26350ee",
+        "chatSessionId": "sess_b39c2d80-4247-4d99-8a50-7d5b341b5a1b",
+        "timestamp": 1794992992000
+      }
+    ],
+    "7.2 Add event target and IAM role": [
+      {
+        "executionId": "ea6e9bb9-0923-495f-bb1f-2ee383b9ca75",
+        "chatSessionId": "sess_b39c2d80-4247-4d99-8a50-7d5b341b5a1b",
+        "timestamp": 1794992992000
+      }
+    ],
+    "8. Write module outputs": [
+      {
+        "executionId": "6e4dd02c-87b1-4a18-9916-5ba1fedaaefd",
+        "chatSessionId": "sess_b39c2d80-4247-4d99-8a50-7d5b341b5a1b",
+        "timestamp": 1794992992000
+      }
     ]
   }
 }
