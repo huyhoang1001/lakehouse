@@ -12,6 +12,20 @@
         "chatSessionId": "sess_a8510bb4-9a87-4459-92ae-a54caff6e5c6",
         "timestamp": 1794975088747
       }
+    ],
+    "2.1 Create `iam.tf` with `NT_Accelerate_LambdaRole`": [
+      {
+        "executionId": "cf08b14d-fbee-42dc-8892-1c6a3fe43536",
+        "chatSessionId": "sess_b5baad5c-68a5-4298-a2ec-c67e450c63db",
+        "timestamp": 1794978879040
+      }
+    ],
+    "2.2 Add `NT_Accelerate_StepFunctionsRole` to `iam.tf`": [
+      {
+        "executionId": "5817cc3f-68a3-4cec-96ff-9090b9ef3df7",
+        "chatSessionId": "sess_3352d99a-7790-4550-ab7b-c9b902721fb0",
+        "timestamp": 1794978986643
+      }
     ]
   }
 }

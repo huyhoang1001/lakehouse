@@ -18,8 +18,8 @@ All code written here is Terraform HCL — no Python code is modified. Lambda so
   - Write `data.tf` with `data.aws_caller_identity`, `data.aws_region`, and `data.terraform_remote_state` for Day 1 outputs
   - _Requirements: 1.1, 1.2, 1.3, 1.4_
 
-- [ ] 2. Define IAM roles and policies
-  - [ ] 2.1 Create `iam.tf` with `NT_Accelerate_LambdaRole`
+- [x] 2. Define IAM roles and policies
+  - [x] 2.1 Create `iam.tf` with `NT_Accelerate_LambdaRole`
     - Write trust policy for `lambda.amazonaws.com`
     - Attach inline scoped policy granting DynamoDB CRUD on six tables (MASTER_JOB_CONFIG, Mail_Config, JOB_CONFIG, JOB_LOG, JOB_STATUS, WATERMARKTABLE)
     - Grant `glue:StartJobRun` and `glue:GetJobRun` on `arn:aws:glue:us-east-1:*:job/*`
@@ -27,7 +27,7 @@ All code written here is Terraform HCL — no Python code is modified. Lambda so
     - Grant CloudWatch Logs permissions
     - _Requirements: 3.1, 3.2, 3.3, 3.4, 3.5, 3.6_
   
-  - [ ] 2.2 Add `NT_Accelerate_StepFunctionsRole` to `iam.tf`
+  - [x] 2.2 Add `NT_Accelerate_StepFunctionsRole` to `iam.tf`
     - Write trust policy for `states.amazonaws.com`
     - Grant `lambda:InvokeFunction` on the nine Lambda function ARNs
     - Grant `glue:StartJobRun` and `glue:GetJobRun` on `arn:aws:glue:us-east-1:*:job/*`
