@@ -67,7 +67,7 @@ variable "batch_id" {
 }
 
 variable "source_artifacts_dir" {
-  description = "Local path to the provided Day 1 source artifacts (the 'Day 1 source 3/Day 1 source' folder containing S3/ and the Glue scripts)."
+  description = "Local path to the folder that contains 'Day 1 source 3' (the module appends 'Day 1 source 3/Day 1 source/...' for the S3 assets and Glue scripts)."
   type        = string
 }
 

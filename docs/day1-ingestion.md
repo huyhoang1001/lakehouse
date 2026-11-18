@@ -374,7 +374,7 @@ cd infra && terraform destroy -auto-approve
 
 ## What's next
 
-Day 2 adds the orchestration and silver layer: a master Glue job that runs all extractions in sequence, Step Functions for retry logic, Lambda for failure notifications via SES, and silver layer transformations that clean, deduplicate, and conform the bronze Parquet into Delta tables.
+Day 2 adds the orchestration layer: a Step Functions master job that runs all seven extractions in parallel, Lambda functions that decide per job whether to run, skip, or retry (with `NEW`/`RERUN` modes), and HTML status notifications via SES — plus the LakeHouse and RedshiftDW master jobs waiting for the Day 3 transformations. See [Day 2 — Orchestration Layer](./day2-orchestration.md).
 
 Day 3 covers the gold layer: pre-aggregated business metrics in Parquet optimized for BI tools, and loading into Redshift for SQL-based analytics.
 

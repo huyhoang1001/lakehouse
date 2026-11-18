@@ -48,14 +48,14 @@ Create `infra/terraform.tfvars` from the example below and fill in your values.
 | `bucket_name` | Globally unique S3 bucket name (lowercase letters, numbers, hyphens, dots; 3–63 chars) |
 | `db_username` | RDS SQL Server master username |
 | `db_password` | RDS SQL Server master password (**sensitive** — never commit this file) |
-| `source_artifacts_dir` | Local path to the `Day 1 source 3/Day 1 source` folder containing the Glue scripts and S3 assets |
+| `source_artifacts_dir` | Local path to the folder that contains `Day 1 source 3/Day 1 source` (the Glue scripts and S3 assets) |
 
-**terraform.tfvars.example**
+**Example `terraform.tfvars`**
 ```hcl
 bucket_name          = "my-lakehouse-bucket"
 db_username          = "admin"
 db_password          = "ChangeMe123!"
-source_artifacts_dir = "../instruction/day1/Day 1 source 3/Day 1 source"
+source_artifacts_dir = "../instruction/day1"
 ```
 
 Optional variables and their defaults are documented in `variables.tf`.
@@ -72,10 +72,14 @@ Optional variables and their defaults are documented in `variables.tf`.
    # or export AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY / AWS_SESSION_TOKEN
    ```
 
-3. **Create your tfvars file**
+3. **Create your tfvars file** (never commit this file — it is gitignored)
    ```bash
-   cp infra/terraform.tfvars.example infra/terraform.tfvars
-   # edit terraform.tfvars with your values
+   cat > infra/terraform.tfvars <<'EOF'
+   bucket_name          = "my-lakehouse-bucket"
+   db_username          = "admin"
+   db_password          = "ChangeMe123!"
+   source_artifacts_dir = "../instruction/day1"
+   EOF
    ```
 
 4. **Initialise Terraform**
