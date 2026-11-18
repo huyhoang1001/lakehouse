@@ -1,6 +1,6 @@
 # Running the Lakehouse Locally for Free — LocalStack, Docker, and a Local SQL Server
 
-*Companion guide to the 3-part lakehouse series — how to run the Day 1 pipeline entirely on your laptop without an AWS account.*
+*Companion guide to the 3-part lakehouse series — how to run the Day 1 pipeline and the Day 2 orchestration entirely on your laptop without an AWS account.*
 
 ---
 
@@ -16,6 +16,8 @@ So this guide is about a different trade: instead of paying a few cents per sess
 | Compute | AWS Glue (Spark) | Official Glue Docker image | $0 |
 | Source DB | RDS SQL Server Express | Azure SQL Edge container | $0 |
 | Catalog | AWS Glue Data Catalog | ⚠️ license-blocked → bridged to a direct JDBC read (see *Known gaps*) | $0 |
+| Orchestration (Day 2) | Step Functions + Lambda | LocalStack Step Functions + Lambda | $0 |
+| Notifications (Day 2) | SES | LocalStack SES | $0 |
 
 The local stack is completely independent of the cloud one: **it never runs Terraform**, and the files that make it work all live under [`infra/localstack/`](../infra/localstack/). Nothing you do locally changes what `terraform apply` does against real AWS — see [Keeping local and cloud separate](#keeping-local-and-cloud-separate).
 
@@ -49,6 +51,12 @@ infra/localstack/run-glue.sh jb_Stg_Extract_Venue.py \
   --p_src_databaseName tickit --p_src_tableName tickit_dbo_venue \
   --p_tar_databaseName s3://ntaccelerate-hoang-985176/lake/bronze/tickit/ \
   --p_tar_tablename venue
+```
+
+And run the Day 2 orchestration — the Step Functions master job that fans out the seven extraction jobs in parallel:
+
+```bash
+infra/localstack/run-master-job.sh          # NT_Accelerate_Datalake_Master_Job
 ```
 
 When you are done:
@@ -89,7 +97,7 @@ That is the whole reason this guide exists: **Glue and RDS are the expensive par
 
 | Service | Image | What it is | Started by |
 |---------|-------|------------|------------|
-| `localstack` | `localstack/localstack` | S3, DynamoDB, Secrets Manager on `localhost:4566` | `up -d` |
+| `localstack` | `localstack/localstack` | S3, DynamoDB, Secrets Manager, **Lambda, Step Functions, SES, EventBridge** on `localhost:4566` | `up -d` |
 | `sqlserver` | `mcr.microsoft.com/azure-sql-edge` | The source database on `localhost:1433` | `up -d` |
 | `glue` | `public.ecr.aws/glue/aws-glue-libs:glue_libs_4.0.0_image_01` | The Glue/Spark runtime the jobs execute in | `run-glue.sh` (profile `tools`) |
 
@@ -97,7 +105,7 @@ Two design choices matter:
 
 **The `glue` service is behind a profile.** A plain `docker compose up -d` starts only the two long-running services; the job container (a 9 GB image) is started on demand by `run-glue.sh`, which shells out to `docker compose run`. Because everything is on the same compose network, the job reaches LocalStack at `http://localstack:4566` and the database at `sqlserver:1433` **by service name** — no `host.docker.internal`, no host networking.
 
-**The resources are created by an init hook, not by Terraform.** LocalStack runs every script in `/etc/localstack/init/ready.d/` once its API is up; [`init/01-provision.sh`](../infra/localstack/init/01-provision.sh) creates the S3 bucket and its objects, the four DynamoDB control tables and their seed rows, and the JDBC credentials secret. It is idempotent, so restarts are safe.
+**The resources are created by init hooks, not by Terraform.** LocalStack runs every script in `/etc/localstack/init/ready.d/` in name order once its API is up. [`init/01-provision.sh`](../infra/localstack/init/01-provision.sh) creates the Day 1 S3 bucket and its objects, the four DynamoDB control tables and their seed rows, and the JDBC credentials secret. [`init/02-day2.sh`](../infra/localstack/init/02-day2.sh) then provisions the Day 2 control plane: the two new control tables (`MASTER_JOB_CONFIG`, `Mail_Config`), the Day 2 superset of the `JOB_CONFIG` rows, the two IAM roles, the SES identities, the nine orchestration Lambdas (+ the local Glue stub), and the three Step Functions master jobs. Both are idempotent, so restarts are safe.
 
 ### Files
 
@@ -106,10 +114,14 @@ Two design choices matter:
 | `infra/localstack/docker-compose.yml` | The whole stack |
 | `infra/localstack/.env.example` | Config template (copy to `.env`) |
 | `infra/localstack/init/01-provision.sh` | LocalStack init hook — S3 + DynamoDB + Secrets Manager |
+| `infra/localstack/init/02-day2.sh` | LocalStack init hook — Day 2 tables, Lambdas, state machines |
+| `infra/localstack/day1/sitecustomize.py` | Day 1 — routes boto3 + rewrites the JDBC secret |
+| `infra/localstack/day1/local_glue_runner.py` | Day 1 — `glueparquet` → `parquet`, catalog → JDBC |
+| `infra/localstack/day2/glue_stub.py` | Day 2 — local stand-in for the Glue step (not deployed to AWS) |
+| `infra/localstack/day2/transform_sfn.py` | Day 2 — rewrites a master-job JSON for local (Glue→stub, real ARNs) |
+| `infra/localstack/run-glue.sh` | Runs a Day 1 Glue job via `docker compose run` |
+| `infra/localstack/run-master-job.sh` | Runs a Day 2 Step Functions master job |
 | `infra/localstack/seed-sql.sh` | Loads Tickit into the SQL container (host side) |
-| `infra/localstack/run-glue.sh` | Runs a Glue job via `docker compose run` |
-| `infra/localstack/pylib/sitecustomize.py` | Routes boto3 + rewrites the JDBC secret |
-| `infra/localstack/pylib/local_glue_runner.py` | `glueparquet` → `parquet`, catalog → JDBC |
 
 ### Configuration
 
@@ -121,6 +133,8 @@ Everything is optional except the token. Compose reads `infra/localstack/.env` a
 | `MSSQL_SA_PASSWORD` | `MyPass123!` | Password for the container's `sa` login (local throwaway) |
 | `BUCKET_NAME` | `ntaccelerate-hoang-985176` | The bucket the jobs read/write |
 | `AWS_DEFAULT_REGION` | `us-east-1` | Region the stack pretends to be in |
+| `MAIL_SENDER` | `elt.sender@example.com` | Day 2 notification sender (verified in SES) |
+| `MAIL_RECEIVERS` | `elt.receiver@example.com` | Day 2 notification recipients (comma-separated) |
 
 `.env` is gitignored; `.env.example` is committed. Everything else — image, mounts, endpoints, credentials — is wired in the compose file.
 
@@ -131,7 +145,7 @@ Everything is optional except the token. Compose reads `infra/localstack/.env` a
 The local path was deliberately built so that **no `.tf` or `.py` file changes behaviour under `terraform apply`**:
 
 * **The local stack never runs Terraform.** The bucket, tables, and secret are created by the init hook, and Glue/RDS are replaced by containers. That is why this guide needs no `*_override.tf` files — there is nothing to create before a local run and nothing to remember to delete before a real one. (Earlier versions of this harness worked by *overriding* the Terraform config to point at LocalStack; those files are gone.)
-* **The Glue scripts are unmodified.** All four differences between local and cloud are absorbed at runtime, by the two files under `infra/localstack/pylib/` (see below), which are mounted read-only into the job container only.
+* **The Glue scripts are unmodified.** All four differences between local and cloud are absorbed at runtime, by the two files under `infra/localstack/day1/` (see below), which are mounted read-only into the job container only.
 * **The one `.py` shared with the cloud path** is [`infra/scripts/batch_seed.py`](../infra/scripts/batch_seed.py), used by both `terraform apply` (against RDS) and `seed-sql.sh` (against the container). Its local-only behaviour is behind an opt-in `--no-encrypt` flag, so the default — and therefore the RDS path — is unchanged.
 
 In short: `git diff` on the Terraform is what you deploy; `infra/localstack/` is a parallel way to run the same jobs.
@@ -165,7 +179,7 @@ The endpoint is the compose service name, so the job container and LocalStack ju
 
 ### Shim 2 — old boto3 doesn't know `AWS_ENDPOINT_URL`
 
-The Glue 4.0 image ships **boto3 1.24 / botocore 1.27**, which predate the `AWS_ENDPOINT_URL` environment variable. So the Glue scripts' boto3 calls would go to real AWS. [`sitecustomize.py`](../infra/localstack/pylib/sitecustomize.py) is auto-imported at interpreter start and monkey-patches `boto3.client` / `boto3.resource` to inject `endpoint_url` for the services the jobs use — **DynamoDB** (job log, watermark, status) and **Secrets Manager** (the JDBC credentials):
+The Glue 4.0 image ships **boto3 1.24 / botocore 1.27**, which predate the `AWS_ENDPOINT_URL` environment variable. So the Glue scripts' boto3 calls would go to real AWS. [`sitecustomize.py`](../infra/localstack/day1/sitecustomize.py) is auto-imported at interpreter start and monkey-patches `boto3.client` / `boto3.resource` to inject `endpoint_url` for the services the jobs use — **DynamoDB** (job log, watermark, status) and **Secrets Manager** (the JDBC credentials):
 
 ```python
 _ROUTED = {"dynamodb", "secretsmanager"}
@@ -208,7 +222,7 @@ The Glue scripts write with `format="glueparquet"`, a **proprietary writer that 
 java.lang.RuntimeException: glueparquet format not supported for developer environment
 ```
 
-The ETL logic is unaffected — only the optimized writer is missing. Rather than edit the shipped scripts, [`local_glue_runner.py`](../infra/localstack/pylib/local_glue_runner.py) wraps `DynamicFrameWriter.from_options`, swaps `glueparquet` → Spark's standard `parquet`, and then `runpy`-executes the real script:
+The ETL logic is unaffected — only the optimized writer is missing. Rather than edit the shipped scripts, [`local_glue_runner.py`](../infra/localstack/day1/local_glue_runner.py) wraps `DynamicFrameWriter.from_options`, swaps `glueparquet` → Spark's standard `parquet`, and then `runpy`-executes the real script:
 
 ```python
 def _from_options(*args, **kwargs):
@@ -221,7 +235,7 @@ def _from_options(*args, **kwargs):
 
 ### Shim 4 — Glue Data Catalog → direct JDBC read
 
-The six full-load jobs read their source through `glueContext.create_dynamic_frame.from_catalog(...)`, which needs the Glue Data Catalog — again **license-blocked**. [`local_glue_runner.py`](../infra/localstack/pylib/local_glue_runner.py) patches `DynamicFrameReader.from_catalog` so that a catalog reference like `tickit.tickit_dbo_venue` becomes a **direct Spark JDBC read** of the same table in the local SQL Server. The crawler names catalog tables `<db>_<schema>_<table>`, so the table name is parsed back into schema + table:
+The six full-load jobs read their source through `glueContext.create_dynamic_frame.from_catalog(...)`, which needs the Glue Data Catalog — again **license-blocked**. [`local_glue_runner.py`](../infra/localstack/day1/local_glue_runner.py) patches `DynamicFrameReader.from_catalog` so that a catalog reference like `tickit.tickit_dbo_venue` becomes a **direct Spark JDBC read** of the same table in the local SQL Server. The crawler names catalog tables `<db>_<schema>_<table>`, so the table name is parsed back into schema + table:
 
 ```python
 def _parse_catalog_table(database, table_name):
@@ -254,7 +268,7 @@ The JDBC connection comes from `LOCAL_CATALOG_JDBC` / `LOCAL_CATALOG_USER` / `LO
 
 ### Running a job
 
-`run-glue.sh` mounts the Glue scripts, the shared `library/`, the `raw/` landing zone, and `pylib/` read-only into the container, runs a **login shell** (so `.bashrc` sets `SPARK_HOME`, `PYTHONPATH`, and `PyGlue.zip`, which `import awsglue` needs), pip-installs the extras the flat-file job needs (`openpyxl==3.0.10`), and finally invokes `spark-submit`:
+`run-glue.sh` mounts the Glue scripts, the shared `library/`, the `raw/` landing zone, and `day1/` read-only into the container, runs a **login shell** (so `.bashrc` sets `SPARK_HOME`, `PYTHONPATH`, and `PyGlue.zip`, which `import awsglue` needs), pip-installs the extras the flat-file job needs (`openpyxl==3.0.10`), and finally invokes `spark-submit`:
 
 ```bash
 # the flat-file job (reads a file from the raw/ landing zone)
@@ -286,6 +300,82 @@ infra/localstack/run-glue.sh jb_Stg_Extract_Sales.py \
 ```
 
 If the stack isn't running yet, `docker compose run` starts it first and waits for both dependencies to report healthy.
+
+---
+
+## Running the Day 2 orchestration locally
+
+[Day 2](./day2-orchestration.md) adds the control plane: three Step Functions **master jobs**, nine Lambda functions, six DynamoDB control tables, and an SES notification. LocalStack's free tier runs Step Functions, Lambda and SES, so the orchestration itself is emulated for real — the *one* thing it cannot run is the Glue job each branch calls, and that gap is stubbed (below).
+
+Run the master job from the host — the `aws` CLI executes *inside* the LocalStack container, so nothing needs installing locally:
+
+```bash
+infra/localstack/run-master-job.sh          # NT_Accelerate_Datalake_Master_Job (default)
+```
+
+It starts one execution named `local-<date>-<time>`, polls `describe-execution` every 2s, and prints the per-state error and exits non-zero if the run fails. A successful run looks like:
+
+```
+state machine : NT_Accelerate_Datalake_Master_Job
+execution     : arn:aws:states:us-east-1:000000000000:execution:NT_Accelerate_Datalake_Master_Job:local-20261118-163902
+status        : SUCCEEDED
+```
+
+That single execution exercises the whole Day 2 control plane: `Read_Run_Type` bumps `BATCH_ID` in `MASTER_JOB_CONFIG`, `Check_Job_Status` / `Is_Allow_Running` / `Check_Job_ReRun` gate the run, the seven `jb_Stg_Extract_*` branches fan out in parallel, `Update_Job_Status` writes each result, `Update_MasterJob_Status` closes the run, and `Send_Mail` builds the HTML digest against SES.
+
+### Which master job is runnable
+
+Only `NT_Accelerate_Datalake_Master_Job` (the **Staging** master job). All three master jobs read their own row from `MASTER_JOB_CONFIG`, keyed by `p_masterjob_id` — Datalake is `ID=1`, LakeHouse is `ID=2`, RedshiftDW is `ID=3` — and the lab (and the Terraform module) seed exactly one row, `ID=1`. The other two therefore fail at the very first state (`Read_Run_Type` returns nothing, so `run_type` is unbound) **identically here and in AWS**; seeding rows 2 and 3 yourself is what would let them proceed.
+
+### The Glue stub
+
+A master job's parallel branches each end in a `glue:startJobRun.sync` task, and **LocalStack's free tier cannot run Glue** (`Sorry, the glue service is not included within your LocalStack license`). Rather than skip the step, [`day2/transform_sfn.py`](../infra/localstack/day2/transform_sfn.py) rewrites the shipped master-job JSON at init time:
+
+* every `arn:aws:states:::glue:startJobRun.sync` state becomes a `lambda:invoke` of [`glue_stub.py`](../infra/localstack/day2/glue_stub.py), moving the Glue `Parameters.Arguments` into the Lambda `Payload`;
+* every hardcoded ARN in the shipped JSON — the lab account `377414509754` — is replaced with the ARN LocalStack actually assigned.
+
+The stub writes the same two rows a real Glue job would — one `NT_Accelerate_JOB_LOG` row and one `NT_Accelarate_JOB_STATUS` row, both marked `SUCCEEDED`. It is **local-only**: it is never part of the Terraform deployment, and `terraform apply` still ships the `glue:startJobRun.sync` states verbatim.
+
+### Run modes (NEW vs RERUN)
+
+`MASTER_JOB_CONFIG` decides the mode. The seeded row is `RUN_TYPE=NEW`, so each run takes the fresh-run path (current date, `BATCH_ID + 1`). To exercise the rerun path, flip the row first and run again:
+
+```bash
+docker exec nt-localstack aws --endpoint-url http://localhost:4566 dynamodb update-item \
+  --table-name NT_Accelerate_MASTER_JOB_CONFIG \
+  --key '{"ID":{"N":"1"}}' \
+  --update-expression 'SET RUN_TYPE = :v' \
+  --expression-attribute-values '{":v":{"S":"RERUN"}}'
+
+infra/localstack/run-master-job.sh
+```
+
+### What the run left behind
+
+```bash
+# one SUCCEEDED JOB_STATUS row per extraction job
+docker exec nt-localstack aws --endpoint-url http://localhost:4566 dynamodb scan \
+  --table-name NT_Accelarate_JOB_STATUS \
+  --query 'Items[].{JOB:JOB_NAME.S,STATUS:PROCESS_STATUS.S}'
+
+# the run's JOB_LOG rows (one per branch)
+docker exec nt-localstack aws --endpoint-url http://localhost:4566 dynamodb scan \
+  --table-name NT_Accelerate_JOB_LOG --select COUNT --query Count
+
+# MASTER_JOB_CONFIG advanced to BATCH_ID=1, LAST_RUN_STATUS=SUCCEEDED
+docker exec nt-localstack aws --endpoint-url http://localhost:4566 dynamodb scan \
+  --table-name NT_Accelerate_MASTER_JOB_CONFIG
+
+# the Step Functions execution history
+docker exec nt-localstack aws --endpoint-url http://localhost:4566 stepfunctions list-executions \
+  --state-machine-arn arn:aws:states:us-east-1:000000000000:stateMachine:NT_Accelerate_Datalake_Master_Job
+```
+
+### Two things to expect on a cold start
+
+**Lambda deployment is asynchronous, and slower than it looks.** LocalStack's new Lambda provider creates functions in a `Pending` state, like AWS. The init hook blocks on each function until it reports `Active` before declaring `[init-day2] ready:` — on a cold machine that means the *first* `up` also pulls the `python3.9` base image and can spend a minute or two on the first function. Wait for the ready line (`docker logs nt-localstack | grep '\[init-day2\] ready:'`) before your first run; invoking a `Pending` function fails with `Lambda.ResourceConflictException`.
+
+**SES accepts the mail but does not deliver it.** LocalStack SES records the `SendEmail` call (and rejects unverified senders/recipients, which is why the init hook verifies both addresses), but nothing arrives in a real inbox — the notification is in the execution history, not your mail client.
 
 ---
 
@@ -421,11 +511,13 @@ docker exec nt-localstack aws --endpoint-url http://localhost:4566 dynamodb upda
 
 ## Known gaps
 
-The local stack is deliberately *not* a full emulator. Two differences are worth remembering:
+The local stack is deliberately *not* a full emulator. Three differences are worth remembering:
 
-**The Glue Data Catalog is license-blocked — bridged, not emulated.** The six full-load jobs read via `create_dynamic_frame.from_catalog`, which needs the catalog LocalStack refuses. Shim 4 in [`local_glue_runner.py`](../infra/localstack/pylib/local_glue_runner.py) maps the catalog reference `tickit.tickit_dbo_<table>` to a **direct JDBC read** from the local SQL Server container, keeping the shipped job scripts unmodified. This is a *behavioural substitute*, not a crawler: it assumes the table naming the crawler would have produced and does not exercise schema inference or catalog updates. Everything downstream of the read (transforms, the `glueparquet`/DynamoDB job-logging path, the watermark) runs for real.
+**The Glue Data Catalog is license-blocked — bridged, not emulated.** The six full-load jobs read via `create_dynamic_frame.from_catalog`, which needs the catalog LocalStack refuses. Shim 4 in [`local_glue_runner.py`](../infra/localstack/day1/local_glue_runner.py) maps the catalog reference `tickit.tickit_dbo_<table>` to a **direct JDBC read** from the local SQL Server container, keeping the shipped job scripts unmodified. This is a *behavioural substitute*, not a crawler: it assumes the table naming the crawler would have produced and does not exercise schema inference or catalog updates. Everything downstream of the read (transforms, the `glueparquet`/DynamoDB job-logging path, the watermark) runs for real.
 
 **The JDBC credentials are local, so the secret is rewritten in flight.** The Secrets Manager secret mirrors the cloud RDS instance (`admin` @ `localhost:1433`), while the job talks to the local container (`sa` @ `sqlserver:1433`); Shim 2 rewrites both on the way out. That means the incremental path is exercised end-to-end, but the local run does not prove that the cloud secret and the cloud RDS master user agree — apply to real RDS to check that.
+
+**The Day 2 Glue step is stubbed, not run.** Because LocalStack cannot run Glue, the master jobs' `glue:startJobRun.sync` tasks are rewritten to call a stub Lambda that records the same `JOB_LOG` / `JOB_STATUS` rows a real run would ([`glue_stub.py`](../infra/localstack/day2/glue_stub.py)). The **orchestration** — run modes, the parallel fan-out, status writes, the SES notification — is exercised for real, but the local run does not prove the Glue jobs themselves succeed, and the stub's counts are fixed placeholders rather than real source/target counts.
 
 ---
 
@@ -457,4 +549,4 @@ docker compose -f infra/localstack/docker-compose.yml down -v
 
 ---
 
-*This guide documents the local harness behind the [Day 1 ingestion post](./day1-ingestion.md). The harness lives in [`infra/localstack/`](../infra/localstack/), with the shared seeding helper in [`infra/scripts/batch_seed.py`](../infra/scripts/batch_seed.py).*
+*This guide documents the local harness behind the [Day 1 ingestion post](./day1-ingestion.md) and the [Day 2 orchestration post](./day2-orchestration.md). The harness lives in [`infra/localstack/`](../infra/localstack/), with the shared seeding helper in [`infra/scripts/batch_seed.py`](../infra/scripts/batch_seed.py).*

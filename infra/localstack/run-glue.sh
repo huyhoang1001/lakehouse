@@ -14,9 +14,9 @@
 #   * `s3://` is remapped to the Hadoop S3A filesystem pointed at LocalStack
 #     (spark.hadoop.fs.s3.impl), so Glue's glueparquet writer lands in LocalStack.
 #   * boto3 in this image (1.24) predates AWS_ENDPOINT_URL, so a sitecustomize
-#     shim (pylib/) redirects DynamoDB + Secrets Manager calls to LocalStack.
+#     shim (day1/) redirects DynamoDB + Secrets Manager calls to LocalStack.
 #   * The proprietary `glueparquet` writer is unavailable outside the managed
-#     Glue service, so pylib/local_glue_runner.py maps glueparquet -> parquet
+#     Glue service, so day1/local_glue_runner.py maps glueparquet -> parquet
 #     (the job scripts themselves are not modified).
 #   * The Glue Data Catalog is unavailable locally, so the same runner maps
 #     create_dynamic_frame.from_catalog(...) to a direct JDBC read of the local
