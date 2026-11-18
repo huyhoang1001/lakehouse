@@ -8,6 +8,12 @@ This series documents the AWS TechCamp 2022 lakehouse built as Infrastructure-as
 | Day 2 | Orchestration — master job, Step Functions, Lambda, SES notifications | 🔜 Planned |
 | Day 3 | Transform, gold layer, Redshift migration | 🔜 Planned |
 
+## Guides
+
+| Guide | Topic |
+|-------|-------|
+| [Running locally for free](./local-development.md) | LocalStack, the Glue Docker runtime, and a local SQL Server (Azure SQL Edge) — run the pipeline on your laptop with zero cloud cost |
+
 ## Repository layout
 
 ```

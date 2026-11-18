@@ -1,0 +1,126 @@
+# docker-compose.yml
+# -----------------------------------------------------------------------------
+# One-command local stack for the NT Accelerate lakehouse.
+#
+#   docker compose up -d      # LocalStack (S3/DynamoDB/Secrets Manager) + SQL Server
+#   ./seed-sql.sh             # one-time: load the Tickit schema + data (host side)
+#   ./run-glue.sh <job.py> .. # run any Day 1 Glue job
+#
+# Nothing here touches real AWS. LocalStack is a local API mock, the SQL Server
+# runs in a container, and the Terraform under infra/ is never applied on this
+# path -- so the local workflow cannot affect a real deployment.
+#
+# The `glue` service is behind the "tools" profile, so a plain `up` starts only
+# the two long-running services; run-glue.sh starts `glue` on demand.
+#
+# Configuration comes from the sibling .env file (docker compose reads it
+# automatically). Copy .env.example to .env and fill it in:
+#   LOCALSTACK_AUTH_TOKEN=...   # required -- free token from app.localstack.cloud
+#   MSSQL_SA_PASSWORD=...       # optional, defaults to a local throwaway value
+#   BUCKET_NAME=...             # optional
+# -----------------------------------------------------------------------------
+
+name: nt-accelerate-local
+
+services:
+  # --- Local AWS APIs: S3, DynamoDB, Secrets Manager -------------------------
+  # Free tier: S3/DynamoDB/Secrets Manager are all included. LocalStack still
+  # requires a (free) auth token to start -- get one from app.localstack.cloud
+  # and put it in .env. The resources the jobs need are created by the init
+  # hooks in ./init/, so Terraform is never applied on this path.
+  localstack:
+    image: localstack/localstack:latest
+    container_name: nt-localstack
+    ports:
+      - "4566:4566"
+    environment:
+      LOCALSTACK_AUTH_TOKEN: ${LOCALSTACK_AUTH_TOKEN:?set LOCALSTACK_AUTH_TOKEN in infra/localstack/.env -- get a free token at https://app.localstack.cloud}
+      SERVICES: s3,dynamodb,secretsmanager,iam,sts
+      DEBUG: "0"
+      PERSISTENCE: "0"
+      AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION:-us-east-1}
+      DEFAULT_REGION: ${AWS_DEFAULT_REGION:-us-east-1}
+      # Dummy credentials so the aws CLI inside the container works too
+      # (LocalStack accepts any credentials).
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: test
+      # Read by init/01-provision.sh
+      BUCKET_NAME: ${BUCKET_NAME:-ntaccelerate-hoang-985176}
+      LOCAL_SQL_PASSWORD: ${MSSQL_SA_PASSWORD:-MyPass123!}
+      ASSETS_DIR: /opt/assets
+    volumes:
+      - ./init:/etc/localstack/init/ready.d:ro
+      - "../../instruction/day1/Day 1 source 3/Day 1 source:/opt/assets:ro"
+    healthcheck:
+      # The image ships no curl/wget, but it is a Python app -- use urllib.
+      test: ["CMD", "python3", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:4566/_localstack/health', timeout=4).status == 200 else 1)"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 10s
+
+  # --- Source database: Azure SQL Edge stands in for RDS SQL Server Express ---
+  # Azure SQL Edge ships a native arm64 build (the full mssql/server image is
+  # amd64-only) and speaks T-SQL. Its data lives in the container, so it starts
+  # empty; run ./seed-sql.sh once to load the Tickit schema + data.
+  sqlserver:
+    image: mcr.microsoft.com/azure-sql-edge:latest
+    container_name: nt-sqlserver
+    ports:
+      - "1433:1433"
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: ${MSSQL_SA_PASSWORD:-MyPass123!}
+      MSSQL_PID: Developer
+    volumes:
+      # Keep the Tickit load across `down`/`up` so ./seed-sql.sh is truly a
+      # one-time step. `docker compose down -v` wipes it.
+      - sqlserver-data:/var/opt/mssql
+    healthcheck:
+      # The image has no sqlcmd, but it does have bash: a plain TCP connect is
+      # enough to tell that the engine is accepting connections.
+      test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/127.0.0.1/1433' 2>/dev/null || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 60
+      start_period: 20s
+
+  # --- Glue/Spark runtime: the same image AWS Glue 4.0 uses ------------------
+  # Not started by `up` (profile "tools"). run-glue.sh runs jobs here with
+  # `docker compose run`, so it shares the network and can reach LocalStack at
+  # http://localstack:4566 and SQL Server at sqlserver:1433 by service name.
+  glue:
+    image: public.ecr.aws/glue/aws-glue-libs:glue_libs_4.0.0_image_01
+    profiles: ["tools"]
+    depends_on:
+      localstack:
+        condition: service_healthy
+      sqlserver:
+        condition: service_healthy
+    environment:
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: test
+      AWS_REGION: ${AWS_DEFAULT_REGION:-us-east-1}
+      AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION:-us-east-1}
+      DISABLE_SSL: "true"
+      # sitecustomize.py routes DynamoDB / Secrets Manager here, and the S3A
+      # config points s3:// at the same endpoint.
+      LOCALSTACK_ENDPOINT: http://localstack:4566
+      PYTHONPATH: /home/glue_user/workspace/pylib
+      # Catalog -> direct JDBC bridge (see local_glue_runner.py).
+      LOCAL_CATALOG_JDBC: "jdbc:sqlserver://sqlserver:1433;databaseName=tickit;encrypt=false;trustServerCertificate=true"
+      LOCAL_CATALOG_USER: sa
+      LOCAL_CATALOG_PASSWORD: ${MSSQL_SA_PASSWORD:-MyPass123!}
+      # Secrets Manager rewrite: the secret stores the cloud RDS coordinates,
+      # so point them at the local container.
+      LOCAL_SECRET_JDBC_HOST: sqlserver
+      LOCAL_SECRET_JDBC_USER: sa
+    volumes:
+      - "../../instruction/day1/Day 1 source 3/Day 1 source/Glue script:/home/glue_user/workspace/glue_script:ro"
+      - "../../instruction/day1/Day 1 source 3/Day 1 source/S3/library:/home/glue_user/workspace/library:ro"
+      - "../../instruction/day1/Day 1 source 3/Day 1 source/S3/raw:/home/glue_user/workspace/raw:ro"
+      - "./pylib:/home/glue_user/workspace/pylib:ro"
+
+volumes:
+  # Named so `docker compose down` (without -v) keeps the seeded Tickit data.
+  sqlserver-data:

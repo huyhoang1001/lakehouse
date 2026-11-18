@@ -38,6 +38,11 @@ INSERT_RE = re.compile(
     re.IGNORECASE,
 )
 
+# Extra flags appended to every sqlcmd invocation. Populated from CLI args
+# (e.g. "-N disable" for a local container whose self-signed certificate the
+# Go-based sqlcmd cannot complete a TLS handshake with).
+SQLCMD_EXTRA = []
+
 
 def parse_args():
     p = argparse.ArgumentParser()
@@ -45,6 +50,11 @@ def parse_args():
     p.add_argument("--user")
     p.add_argument("--password")
     p.add_argument("--script", required=True)
+    p.add_argument(
+        "--no-encrypt",
+        action="store_true",
+        help="pass '-N disable' to sqlcmd (local SQL Server with a self-signed cert)",
+    )
     p.add_argument(
         "--check",
         action="store_true",
@@ -144,7 +154,7 @@ def run_sqlcmd(
         db,
         "-t",
         "0",
-    ]
+    ] + SQLCMD_EXTRA
     # -b stops the file at the first error. DDL re-runs must keep going past
     # "object already exists"; data loads must stop.
     if abort:
@@ -180,7 +190,8 @@ def count_rows(server, user, password, table):
             "-W",
             "-Q",
             f"SET NOCOUNT ON; SELECT COUNT(*) FROM dbo.[{table}];",
-        ],
+        ]
+        + SQLCMD_EXTRA,
         capture_output=True,
         text=True,
     )
@@ -260,6 +271,8 @@ def seed_table(server, user, password, tbl, cols, rows, existing):
 
 def main():
     args = parse_args()
+    if args.no_encrypt:
+        SQLCMD_EXTRA.extend(["-N", "disable"])
     assert_not_lfs_pointer(args.script)
 
     print("Parsing script...", flush=True)
@@ -359,6 +372,7 @@ JOIN sys.tables t ON t.object_id = p.object_id
 WHERE index_id IN (0,1) AND SCHEMA_NAME(t.schema_id)='dbo'
 GROUP BY name ORDER BY name""",
         ]
+        + SQLCMD_EXTRA
     )
 
 

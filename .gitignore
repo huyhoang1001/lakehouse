@@ -17,6 +17,9 @@ crash.*.log
 # Sensitive plan files
 *.tfplan
 
+# Optional local overrides for infra/localstack/docker-compose.yml (may hold a password)
+infra/localstack/.env
+
 # Generated archives
 tmp/*.zip
 
