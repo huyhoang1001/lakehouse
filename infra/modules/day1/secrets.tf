@@ -29,7 +29,7 @@ resource "aws_secretsmanager_secret" "rds_secret" {
 # ---------------------------------------------------------------------------
 
 resource "aws_secretsmanager_secret_version" "rds_secret_version" {
-  secret_id     = aws_secretsmanager_secret.rds_secret.id
+  secret_id = aws_secretsmanager_secret.rds_secret.id
   secret_string = jsonencode({
     db_username = var.db_username
     db_password = var.db_password

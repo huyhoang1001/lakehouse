@@ -13,11 +13,11 @@ locals {
   # p_is_incremental_load = "True" and is a separate resource block.
   full_load_jobs = {
     "jb_Stg_Extract_Category" = { src_table = "tickit_dbo_category", tar_table = "category" }
-    "jb_Stg_Extract_Date"     = { src_table = "tickit_dbo_date",     tar_table = "date"     }
-    "jb_Stg_Extract_Event"    = { src_table = "tickit_dbo_event",    tar_table = "event"    }
-    "jb_Stg_Extract_Listing"  = { src_table = "tickit_dbo_listing",  tar_table = "listing"  }
-    "jb_Stg_Extract_Users"    = { src_table = "tickit_dbo_users",    tar_table = "users"    }
-    "jb_Stg_Extract_Venue"    = { src_table = "tickit_dbo_venue",    tar_table = "venue"    }
+    "jb_Stg_Extract_Date"     = { src_table = "tickit_dbo_date", tar_table = "date" }
+    "jb_Stg_Extract_Event"    = { src_table = "tickit_dbo_event", tar_table = "event" }
+    "jb_Stg_Extract_Listing"  = { src_table = "tickit_dbo_listing", tar_table = "listing" }
+    "jb_Stg_Extract_Users"    = { src_table = "tickit_dbo_users", tar_table = "users" }
+    "jb_Stg_Extract_Venue"    = { src_table = "tickit_dbo_venue", tar_table = "venue" }
   }
 }
 

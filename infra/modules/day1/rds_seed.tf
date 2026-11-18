@@ -28,7 +28,7 @@ resource "null_resource" "db_seed" {
   }
 
   provisioner "local-exec" {
-    command = <<-EOT
+    command     = <<-EOT
       RDS="${aws_db_instance.rds.address},1433"
       USER="${var.db_username}"
       PASS="${var.db_password}"

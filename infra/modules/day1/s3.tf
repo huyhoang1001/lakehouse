@@ -15,8 +15,8 @@ resource "aws_s3_bucket" "main" {
   # force_destroy removes all object versions automatically on terraform destroy,
   # so the bucket can be deleted without a manual "aws s3 rm --recursive" step.
   force_destroy = true
-  bucket = var.bucket_name
-  tags   = var.tags
+  bucket        = var.bucket_name
+  tags          = var.tags
 }
 
 resource "aws_s3_bucket_versioning" "main" {

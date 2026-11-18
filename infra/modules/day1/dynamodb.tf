@@ -98,46 +98,46 @@ resource "aws_dynamodb_table" "watermark" {
 locals {
   job_config_items = {
     "1" = {
-      job_name         = "jb_Stg_Extract_Category"
-      src_table        = "tickit_dbo_category"
-      tar_table        = "category"
-      is_incremental   = "False"
+      job_name       = "jb_Stg_Extract_Category"
+      src_table      = "tickit_dbo_category"
+      tar_table      = "category"
+      is_incremental = "False"
     }
     "2" = {
-      job_name         = "jb_Stg_Extract_Date"
-      src_table        = "tickit_dbo_date"
-      tar_table        = "date"
-      is_incremental   = "False"
+      job_name       = "jb_Stg_Extract_Date"
+      src_table      = "tickit_dbo_date"
+      tar_table      = "date"
+      is_incremental = "False"
     }
     "3" = {
-      job_name         = "jb_Stg_Extract_Event"
-      src_table        = "tickit_dbo_event"
-      tar_table        = "event"
-      is_incremental   = "False"
+      job_name       = "jb_Stg_Extract_Event"
+      src_table      = "tickit_dbo_event"
+      tar_table      = "event"
+      is_incremental = "False"
     }
     "4" = {
-      job_name         = "jb_Stg_Extract_Listing"
-      src_table        = "tickit_dbo_listing"
-      tar_table        = "listing"
-      is_incremental   = "False"
+      job_name       = "jb_Stg_Extract_Listing"
+      src_table      = "tickit_dbo_listing"
+      tar_table      = "listing"
+      is_incremental = "False"
     }
     "5" = {
-      job_name         = "jb_Stg_Extract_Users"
-      src_table        = "tickit_dbo_users"
-      tar_table        = "users"
-      is_incremental   = "False"
+      job_name       = "jb_Stg_Extract_Users"
+      src_table      = "tickit_dbo_users"
+      tar_table      = "users"
+      is_incremental = "False"
     }
     "6" = {
-      job_name         = "jb_Stg_Extract_Venue"
-      src_table        = "tickit_dbo_venue"
-      tar_table        = "venue"
-      is_incremental   = "False"
+      job_name       = "jb_Stg_Extract_Venue"
+      src_table      = "tickit_dbo_venue"
+      tar_table      = "venue"
+      is_incremental = "False"
     }
     "7" = {
-      job_name         = "jb_Stg_Extract_Sales"
-      src_table        = "tickit_dbo_sales"
-      tar_table        = "sales"
-      is_incremental   = "True"
+      job_name       = "jb_Stg_Extract_Sales"
+      src_table      = "tickit_dbo_sales"
+      tar_table      = "sales"
+      is_incremental = "True"
     }
   }
 }

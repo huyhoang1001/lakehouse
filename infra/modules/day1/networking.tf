@@ -236,8 +236,8 @@ resource "null_resource" "cleanup_glue_enis" {
   }
 
   provisioner "local-exec" {
-    when       = destroy
-    command    = <<-EOT
+    when        = destroy
+    command     = <<-EOT
       echo "Cleaning up orphaned Glue ENIs attached to ${self.triggers.sg_glue_id}..."
       ENIS=$(aws ec2 describe-network-interfaces \
         --region ${self.triggers.region} \

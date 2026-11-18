@@ -43,9 +43,9 @@ resource "aws_glue_connection" "conRDS_tickit" {
 
 # Task 8.3 — Glue crawler (refs Req 7)
 resource "aws_glue_crawler" "rds_tickit" {
-  name          = local.crawler_name         # "NT_Accelerate_cwl_RDSTickit"
+  name          = local.crawler_name # "NT_Accelerate_cwl_RDSTickit"
   role          = aws_iam_role.glue.arn
-  database_name = local.glue_database_name  # "tickit"
+  database_name = local.glue_database_name # "tickit"
 
   jdbc_target {
     connection_name = aws_glue_connection.conRDS_tickit.name
