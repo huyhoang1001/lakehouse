@@ -1,61 +1,49 @@
 # outputs.tf
 # -----------------------------------------------------------------------------
-# Stack outputs for Console verification (Req 11).
-#
-# Values are null placeholders until the corresponding resources are created in
-# later tasks. Each output will be wired to the real resource attribute once
-# the resource block exists (e.g. aws_s3_bucket, aws_db_instance, etc.).
+# Root outputs — re-exported from child modules.
 # -----------------------------------------------------------------------------
 
 output "s3_bucket_name" {
-  description = "Name of the S3 bucket holding Glue scripts, libraries, raw samples, bronze-layer Parquet, Spark logs, and temp space."
-  value       = aws_s3_bucket.main.bucket
+  description = "Name of the S3 bucket."
+  value       = module.day1.s3_bucket_name
 }
 
 output "rds_endpoint" {
-  description = "JDBC URL of the RDS SQL Server Express instance: jdbc:sqlserver://<endpoint>:1433;databaseName=tickit"
-  value       = "jdbc:sqlserver://${aws_db_instance.rds.address}:1433;databaseName=tickit"
+  description = "JDBC URL of the RDS SQL Server Express instance."
+  value       = module.day1.rds_endpoint
 }
 
 output "glue_job_names" {
-  description = "List of all provisioned Glue extraction job names (6 full-load + 1 incremental Sales; excludes the optional flat-file job)."
-  value = concat(
-    sort(keys(aws_glue_job.full_load)),
-    [aws_glue_job.sales.name]
-  )
+  description = "All provisioned Glue job names."
+  value       = module.day1.glue_job_names
 }
 
 output "glue_database_name" {
-  description = "Name of the Glue Data Catalog database that holds the crawled Tickit tables (tickit_dbo_*)."
-  value       = aws_glue_catalog_database.tickit.name
+  description = "Glue Data Catalog database name."
+  value       = module.day1.glue_database_name
 }
 
 output "crawler_name" {
-  description = "Name of the Glue crawler that populates the Tickit catalog tables."
-  value       = aws_glue_crawler.rds_tickit.name
+  description = "Glue crawler name."
+  value       = module.day1.crawler_name
 }
 
 output "connection_name" {
-  description = "Name of the Glue JDBC connection used to reach the RDS SQL Server instance."
-  value       = aws_glue_connection.conRDS_tickit.name
+  description = "Glue JDBC connection name."
+  value       = module.day1.connection_name
 }
 
 output "dynamodb_table_names" {
-  description = "Map of logical key to DynamoDB table name (spellings match Genericlib.py exactly, including intentional typos)."
-  value = {
-    job_config = aws_dynamodb_table.job_config.name
-    job_log    = aws_dynamodb_table.job_log.name
-    job_status = aws_dynamodb_table.job_status.name
-    watermark  = aws_dynamodb_table.watermark.name
-  }
+  description = "Day 1 DynamoDB table names (intentional typos preserved)."
+  value       = module.day1.dynamodb_table_names
 }
 
 output "secret_arn" {
-  description = "ARN of the Secrets Manager secret containing the RDS JDBC connection credentials."
-  value       = aws_secretsmanager_secret.rds_secret.arn
+  description = "Secrets Manager secret ARN."
+  value       = module.day1.secret_arn
 }
 
 output "secret_name" {
-  description = "Name of the Secrets Manager secret (SQLSource_Database_Connection_Info)."
-  value       = aws_secretsmanager_secret.rds_secret.name
+  description = "Secrets Manager secret name."
+  value       = module.day1.secret_name
 }

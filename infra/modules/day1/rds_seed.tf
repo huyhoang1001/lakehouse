@@ -24,7 +24,7 @@
 
 resource "null_resource" "db_seed" {
   triggers = {
-    script_hash = filesha256("${path.module}/../instruction/day1/tickit_db 2/tickit_db/tickit_script.sql")
+    script_hash = filesha256("${path.module}/../../../instruction/day1/tickit_db 2/tickit_db/tickit_script.sql")
   }
 
   provisioner "local-exec" {
@@ -32,8 +32,8 @@ resource "null_resource" "db_seed" {
       RDS="${aws_db_instance.rds.address},1433"
       USER="${var.db_username}"
       PASS="${var.db_password}"
-      SCRIPT="${path.module}/../instruction/day1/tickit_db 2/tickit_db/tickit_script.sql"
-      SEED_PY="${path.module}/scripts/batch_seed.py"
+      SCRIPT="${path.module}/../../../instruction/day1/tickit_db 2/tickit_db/tickit_script.sql"
+      SEED_PY="${path.module}/../../scripts/batch_seed.py"
 
       # Verify sqlcmd is available
       if ! command -v sqlcmd &>/dev/null; then

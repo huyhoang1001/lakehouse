@@ -81,7 +81,7 @@ resource "aws_s3_object" "glue_scripts" {
 data "archive_file" "genericlib" {
   type        = "zip"
   source_file = "${var.source_artifacts_dir}/Day 1 source 3/Day 1 source/S3/library/Genericlib/Genericlib.py"
-  output_path = "${path.module}/../tmp/Genericlib.zip"
+  output_path = "${path.module}/../../../tmp/Genericlib.zip"
 }
 
 resource "aws_s3_object" "genericlib_zip" {
