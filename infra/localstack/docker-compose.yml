@@ -2,10 +2,10 @@
 # -----------------------------------------------------------------------------
 # One-command local stack for the NT Accelerate lakehouse.
 #
-#   docker compose up -d        # LocalStack (Day 1 + Day 2 control plane) + SQL Server
+#   docker compose up -d        # LocalStack + SQL Server + Postgres (warehouse)
 #   ./seed-sql.sh               # one-time: load the Tickit schema + data (host side)
-#   ./run-glue.sh <job.py> ..   # run any Day 1 Glue job
-#   ./run-master-job.sh         # run a Day 2 Step Functions master job
+#   ./run-glue.sh <job.py> ..   # run any Day 1 / Day 3 Glue job
+#   ./run-master-job.sh         # run a Step Functions master job (Day 2/3)
 #
 # Nothing here touches real AWS. LocalStack is a local API mock, the SQL Server
 # runs in a container, and the Terraform under infra/ is never applied on this
@@ -110,6 +110,32 @@ services:
       retries: 60
       start_period: 20s
 
+  # --- Warehouse stand-in: local Postgres for the Day 3 "Redshift" load --------
+  # LocalStack's free tier does not emulate Amazon Redshift, so the six
+  # jb_DW_Redshift_Load_* jobs target this container instead. Postgres speaks the
+  # same wire protocol Redshift does and handles the plain "create table + load
+  # rows" the Day 3 job performs; the Redshift-specific staging (--p_redshift_temp
+  # and a COPY from S3) is approximated by a direct JDBC write. It is a stand-in,
+  # not a faithful Redshift test -- see docs/local-development.md.
+  postgres:
+    image: postgres:18
+    container_name: nt-postgres
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${PG_PASSWORD:-MyPass123!}
+      POSTGRES_DB: tickit
+    volumes:
+      # Keep the warehouse tables across `down`/`up`. `down -v` wipes them.
+      - warehouse-data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d tickit"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 10s
+
   # --- Glue/Spark runtime: the same image AWS Glue 4.0 uses ------------------
   # Not started by `up` (profile "tools"). run-glue.sh runs jobs here with
   # `docker compose run`, so it shares the network and can reach LocalStack at
@@ -121,6 +147,8 @@ services:
       localstack:
         condition: service_healthy
       sqlserver:
+        condition: service_healthy
+      postgres:
         condition: service_healthy
     environment:
       AWS_ACCESS_KEY_ID: test
@@ -140,10 +168,23 @@ services:
       # so point them at the local container.
       LOCAL_SECRET_JDBC_HOST: sqlserver
       LOCAL_SECRET_JDBC_USER: sa
+      # In AWS the Day 3 Redshift jobs resolve conRedshift_tickit through the
+      # Glue Data Catalog. There is no catalog locally, so the runner's
+      # from_jdbc_conf shim writes to this container instead. The Postgres JDBC
+      # driver ships with the Glue image (postgresql-42.3.6.jar).
+      LOCAL_REDSHIFT_JDBC: "jdbc:postgresql://postgres:5432/tickit"
+      LOCAL_REDSHIFT_USER: postgres
+      LOCAL_REDSHIFT_PASSWORD: ${PG_PASSWORD:-MyPass123!}
     volumes:
       - "../../instruction/day1/Day 1 source 3/Day 1 source/Glue script:/home/glue_user/workspace/glue_script:ro"
       - "../../instruction/day1/Day 1 source 3/Day 1 source/S3/library:/home/glue_user/workspace/library:ro"
       - "../../instruction/day1/Day 1 source 3/Day 1 source/S3/raw:/home/glue_user/workspace/raw:ro"
+      # Day 3 job scripts. The six Delta jobs share jb_DW_Delta_Load.py and the
+      # six Redshift jobs share jb_DW_Redshift_Load.py, so they are mounted in
+      # their own directory; run-glue.sh resolves <job>.py to the shared script.
+      - "../modules/day3/scripts:/home/glue_user/workspace/glue_script_dw:ro"
+      # Extra JARs fetch-jars.sh downloads (the Delta runtime).
+      - "./jars:/home/glue_user/workspace/jars:ro"
       # day1/ holds this path's local-only shims (sitecustomize.py,
       # local_glue_runner.py) -- the Day 1 counterpart to day2/. It is mounted at
       # the image's own pylib path so PYTHONPATH and run-glue.sh stay unchanged.
@@ -152,3 +193,5 @@ services:
 volumes:
   # Named so `docker compose down` (without -v) keeps the seeded Tickit data.
   sqlserver-data:
+  # Named so `docker compose down` (without -v) keeps the loaded warehouse tables.
+  warehouse-data:

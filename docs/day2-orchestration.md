@@ -406,7 +406,7 @@ The gap between "works in the lab" and "production-ready" is, again, mostly fail
 
 ## What's next
 
-Day 3 builds the silver and gold layers: the transformations that clean, deduplicate, and conform the bronze Parquet into Delta tables (silver), pre-aggregate business metrics (gold), and load into Redshift for SQL analytics. The `LakeHouse` and `RedshiftDW` master jobs provisioned here are already waiting to orchestrate them, gated on `Check_Staging_Master_Job_Status`.
+Day 3 builds the silver and gold layers: the transformations that clean, deduplicate, and conform the bronze Parquet into Delta tables (silver), pre-aggregate business metrics (gold), and load into Redshift for SQL analytics. The `LakeHouse` and `RedshiftDW` master jobs provisioned here are already waiting to orchestrate them, gated on `Check_Staging_Master_Job_Status`. See [Day 3 — Transform & Serve](./day3-lakehouse-transform.md).
 
 ---
 

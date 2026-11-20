@@ -6,11 +6,15 @@
 #   ./run-master-job.sh NT_Accelerate_LakeHouse_Master_Job
 #   ./run-master-job.sh --no-agent                           # orchestration only
 #
-# Only the Datalake (Staging) master job is runnable out of the box: the lab
-# (and the Terraform module) seed exactly one MASTER_JOB_CONFIG row, ID=1, which
-# is the Datalake job's. The LakeHouse / RedshiftDW jobs read IDs 2 and 3, which
-# the lab never defines, so they fail identically here and in AWS. Seed those
-# rows yourself if you want to exercise them.
+# All three master jobs are runnable: the local init hooks seed the
+# MASTER_JOB_CONFIG rows they read -- ID=1 (Datalake), ID=2 (LakeHouse) and
+# ID=3 (RedshiftDW). In AWS the lab only defines ID=1, so the LakeHouse /
+# RedshiftDW jobs fail there; the Terraform module (infra/modules/day3) adds
+# IDs 2 and 3 and makes them runnable too.
+#
+# Run the Datalake job first: the LakeHouse and RedshiftDW jobs gate on
+# NT_Accelerate_Check_Staging_Master_Job_Status, which passes only once the
+# staging master job has SUCCEEDED for the same run_date (see init/03-day3.sh).
 #
 # Setup first:  docker compose -f infra/localstack/docker-compose.yml up -d
 # (the init hooks create the control tables, the Lambdas and the state machines).

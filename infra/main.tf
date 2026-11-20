@@ -35,3 +35,35 @@ module "day2" {
   enable_schedule     = var.enable_schedule
   tags                = var.tags
 }
+
+# Day 3 transform module — Delta Lake (gold) + Amazon Redshift warehouse.
+# It consumes Day 1 and Day 2 outputs as inputs; it never edits their files.
+module "day3" {
+  source = "./modules/day3"
+
+  aws_region  = var.aws_region
+  bucket_name = module.day1.s3_bucket_name
+  bucket_arn  = module.day1.s3_bucket_arn
+
+  glue_database_name = module.day1.glue_database_name
+  # Day 1 exports the Glue role ARN; the role name (needed to attach the Day 3
+  # policy) is derived from it, so the Day 1 module stays untouched.
+  glue_role_arn  = module.day1.glue_role_arn
+  glue_role_name = element(split("/", module.day1.glue_role_arn), 1)
+
+  job_config_table_name        = module.day1.dynamodb_table_names["job_config"]
+  master_job_config_table_name = module.day2.dynamodb_table_names["master_job_config"]
+
+  run_date = var.run_date
+  batch_id = var.batch_id
+
+  enable_redshift              = var.enable_redshift
+  redshift_master_username     = var.redshift_master_username
+  redshift_master_password     = var.redshift_master_password
+  redshift_database_name       = var.redshift_database_name
+  redshift_node_type           = var.redshift_node_type
+  redshift_number_of_nodes     = var.redshift_number_of_nodes
+  redshift_publicly_accessible = var.redshift_publicly_accessible
+
+  tags = var.tags
+}

@@ -85,6 +85,50 @@ variable "enable_schedule" {
   default     = false
 }
 
+# Day 3 variables
+
+variable "enable_redshift" {
+  description = "When true (default), Day 3 provisions the Amazon Redshift cluster, connection, secret, and the six Redshift load jobs. Set to false for a Delta-only Day 3 that bills nothing for the warehouse."
+  type        = bool
+  default     = true
+}
+
+variable "redshift_master_username" {
+  description = "Amazon Redshift master username."
+  type        = string
+  default     = "admin"
+}
+
+variable "redshift_master_password" {
+  description = "Amazon Redshift master password. Must satisfy the Redshift password policy (8+ chars, upper, lower, digit)."
+  type        = string
+  sensitive   = true
+}
+
+variable "redshift_database_name" {
+  description = "Amazon Redshift database that holds the Day 3 warehouse tables."
+  type        = string
+  default     = "tickit"
+}
+
+variable "redshift_node_type" {
+  description = "Amazon Redshift node type. dc2.large is the cheapest single-node option."
+  type        = string
+  default     = "dc2.large"
+}
+
+variable "redshift_number_of_nodes" {
+  description = "Number of Amazon Redshift nodes. 1 is the minimum."
+  type        = number
+  default     = 1
+}
+
+variable "redshift_publicly_accessible" {
+  description = "Whether the Redshift cluster receives a public IP. Not required for Glue-in-VPC access; defaults to false."
+  type        = bool
+  default     = false
+}
+
 variable "tags" {
   description = "Common tags applied to all taggable resources."
   type        = map(string)

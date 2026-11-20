@@ -47,3 +47,30 @@ output "secret_name" {
   description = "Secrets Manager secret name."
   value       = module.day1.secret_name
 }
+
+# --- Day 3 (Delta Lake gold + Redshift warehouse) ----------------------------
+
+output "day3_glue_job_names" {
+  description = "Day 3 Glue job names (Delta + Redshift)."
+  value       = module.day3.glue_job_names
+}
+
+output "delta_gold_location" {
+  description = "S3 location of the gold Delta tables written by the Delta load jobs."
+  value       = module.day3.delta_gold_location
+}
+
+output "redshift_endpoint" {
+  description = "Redshift cluster endpoint (host:port), or null when enable_redshift is false."
+  value       = module.day3.redshift_endpoint
+}
+
+output "redshift_connection_name" {
+  description = "Name of the Redshift Glue connection, or null when enable_redshift is false."
+  value       = module.day3.redshift_connection_name
+}
+
+output "day3_job_config_row_ids" {
+  description = "Map of Day 3 Glue job name to its NT_Accelerate_JOB_CONFIG primary key."
+  value       = module.day3.job_config_row_ids
+}

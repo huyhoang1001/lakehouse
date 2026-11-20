@@ -1,7 +1,7 @@
 """Local Glue dev shim for running Glue scripts outside the managed service.
 
-Two adjustments are applied to the *runtime* so the shipped job scripts can run
-unmodified:
+Four adjustments are applied to the *runtime* so the shipped job scripts can
+run unmodified:
 
 1. ``glueparquet`` -> ``parquet``
    The real AWS Glue ``glueparquet`` writer only exists inside the managed Glue
@@ -27,6 +27,42 @@ unmodified:
      LOCAL_CATALOG_JDBC      jdbc:sqlserver://host:1433;databaseName=tickit;...
      LOCAL_CATALOG_USER      login
      LOCAL_CATALOG_PASSWORD  password
+
+3. ``from_jdbc_conf`` -> direct JDBC write (only when LOCAL_REDSHIFT_JDBC is set)
+   The Day 3 warehouse jobs load through the Glue Data Catalog *connection*
+   ``conRedshift_tickit``:
+   ``glueContext.write_dynamic_frame.from_jdbc_conf(...)``. There is no catalog
+   locally and LocalStack's free tier has no Redshift, so when
+   LOCAL_REDSHIFT_JDBC is set that call is redirected to a plain Spark JDBC
+   write against the local Postgres stand-in.
+
+   This is an approximation, not a faithful Redshift test: the Redshift-only
+   staging (``redshift_tmp_dir`` -- a COPY from S3) is not reproduced, the
+   ``preactions`` (``drop table if exists <target>``) are covered by
+   ``mode("overwrite")`` dropping the table, and the ``postactions``
+   (``analyze <target>``) are cosmetic and skipped. The job scripts are left
+   untouched.
+
+   Env:
+     LOCAL_REDSHIFT_JDBC      jdbc:postgresql://host:5432/tickit
+     LOCAL_REDSHIFT_USER      postgres
+     LOCAL_REDSHIFT_PASSWORD  password
+
+4. ``spark.read.parquet(s3...)`` -> ``recursiveFileLookup=true``
+   The Day 3 Delta jobs read the Day 1 bronze prefix, whose immediate children
+   are directories (``lake/bronze/tickit/<table>/<run_date>/``). Against
+   LocalStack S3, Spark's default leaf-file listing finds no files for such a
+   prefix and schema inference fails with:
+
+       Unable to infer schema for Parquet. It must be specified manually.
+
+   Reading a directory that directly contains part-files works, so the failure
+   depends only on the prefix's children being directories (not on naming, and
+   not on S3A listing -- ``fs.s3a`` enumerates the leaf part-file correctly).
+   Forcing ``recursiveFileLookup=true`` on every ``s3://`` Parquet read makes
+   Spark descend into the date directories and infer the schema. The bronze
+   data carries no partition columns (Day 1 writes ``partitionKeys: []``), so
+   disabling partition discovery is harmless.
 
 Usage (via run-glue.sh):
     spark-submit ... local_glue_runner.py <job_script.py> [--glue args...]
@@ -93,6 +129,78 @@ if _LOCAL_JDBC:
         return _df.DynamicFrame.fromDF(df, glue_ctx, table_name or table)
 
     _Reader.from_catalog = _from_catalog
+
+
+_LOCAL_REDSHIFT = os.environ.get("LOCAL_REDSHIFT_JDBC")
+if _LOCAL_REDSHIFT:
+    _Writer = _df.DynamicFrameWriter
+    _orig_from_jdbc_conf = _Writer.from_jdbc_conf
+
+    def _from_jdbc_conf(
+        self,
+        frame,
+        catalog_connection=None,
+        connection_options=None,
+        transformation_ctx="",
+        **kwargs,
+    ):
+        options = connection_options or {}
+        table = options.get("dbtable")
+        if not table:
+            # Nothing to redirect to; let the real code raise its usual error.
+            return _orig_from_jdbc_conf(
+                self, frame, catalog_connection, options, transformation_ctx, **kwargs
+            )
+        print(
+            "[local-glue] from_jdbc_conf {} -> JDBC [{}] on {}".format(
+                catalog_connection, table, _LOCAL_REDSHIFT
+            )
+        )
+        if options.get("preactions"):
+            print(
+                "[local-glue] preactions covered by overwrite: {}".format(
+                    options["preactions"]
+                )
+            )
+        if options.get("postactions"):
+            print(
+                "[local-glue] postactions skipped locally: {}".format(
+                    options["postactions"]
+                )
+            )
+        # mode("overwrite") drops/creates the table, which is what the Redshift
+        # preaction ("drop table if exists <target>") does, so the load is a
+        # full replace exactly as the job intends.
+        (
+            frame.toDF()
+            .write.format("jdbc")
+            .option("url", _LOCAL_REDSHIFT)
+            .option("dbtable", table)
+            .option("user", os.environ["LOCAL_REDSHIFT_USER"])
+            .option("password", os.environ["LOCAL_REDSHIFT_PASSWORD"])
+            .option("driver", "org.postgresql.Driver")
+            .mode("overwrite")
+            .save()
+        )
+        return frame
+
+    _Writer.from_jdbc_conf = _from_jdbc_conf
+
+
+# LocalStack S3 + spark.read.parquet on a prefix of directories (see note 4).
+import pyspark.sql.readwriter as _rw
+
+_orig_parquet = _rw.DataFrameReader.parquet
+
+
+def _parquet(self, *paths, **options):
+    if any(str(p).startswith(("s3://", "s3a://")) for p in paths):
+        options.setdefault("recursiveFileLookup", "true")
+        print("[local-glue] parquet read: recursiveFileLookup=true (local dev shim)")
+    return _orig_parquet(self, *paths, **options)
+
+
+_rw.DataFrameReader.parquet = _parquet
 
 
 target = sys.argv[1]

@@ -1,0 +1,24 @@
+{
+  "pbtResults": {},
+  "executionHistory": {
+    "1. Set up Terraform module scaffolding for `infra/modules/day3/`": [],
+    "2.1 Extend the Glue role with S3 gold-write permissions": [],
+    "2.2 Grant the Glue role the Redshift secret read and Glue catalog permissions": [],
+    "3.1 Create the gold and temporary S3 prefixes": [],
+    "3.2 Upload the Delta runtime jar": [],
+    "4.1 Create the Redshift subnet group and security group": [],
+    "4.2 Create the Redshift cluster": [],
+    "4.3 Create the Redshift Glue connection": [],
+    "4.4 Create the Redshift secret": [],
+    "5.1 Author the Delta load Glue script": [],
+    "5.2 Upload the Delta script to S3": [],
+    "5.3 Add the six `aws_glue_job` resources": [],
+    "6.1 Author the Redshift load Glue script": [],
+    "6.2 Upload the Redshift script to S3": [],
+    "6.3 Add the six `aws_glue_job` resources": [],
+    "7.1 Add twelve `JOB_CONFIG` rows": [],
+    "7.2 Add `MASTER_JOB_CONFIG` rows `ID=2` and `ID=3`": [],
+    "8. Write module outputs and run-order docs": [],
+    "9. Checkpoint — Validate Terraform and test the Day 3 run": []
+  }
+}

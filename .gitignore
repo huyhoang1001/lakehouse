@@ -23,6 +23,9 @@ infra/localstack/.env
 # Generated archives
 tmp/*.zip
 
+# Local Glue JARs fetched by infra/localstack/fetch-jars.sh (binaries)
+infra/localstack/jars/*.jar
+
 # OS/editor
 .DS_Store
 Thumbs.db

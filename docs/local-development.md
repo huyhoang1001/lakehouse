@@ -1,6 +1,6 @@
 # Running the Lakehouse Locally for Free — LocalStack, Docker, and a Local SQL Server
 
-*Companion guide to the 3-part lakehouse series — how to run the Day 1 pipeline and the Day 2 orchestration entirely on your laptop without an AWS account.*
+*Companion guide to the 3-part lakehouse series — how to run the Day 1 pipeline, the Day 2 orchestration, and the Day 3 lakehouse + warehouse transforms entirely on your laptop without an AWS account.*
 
 ---
 
@@ -14,8 +14,10 @@ So this guide is about a different trade: instead of paying a few cents per sess
 | Control plane | DynamoDB | LocalStack DynamoDB | $0 |
 | Secrets | Secrets Manager | LocalStack Secrets Manager | $0 |
 | Compute | AWS Glue (Spark) | Official Glue Docker image | $0 |
+| Delta Lake (Day 3) | Delta on S3 | Delta 2.3.0 on the Glue image (`fetch-jars.sh`) | $0 |
+| Warehouse (Day 3) | Amazon Redshift | Postgres container (`nt-postgres`) | $0 |
 | Source DB | RDS SQL Server Express | Azure SQL Edge container | $0 |
-| Catalog | AWS Glue Data Catalog | ⚠️ license-blocked → bridged to a direct JDBC read (see *Known gaps*) | $0 |
+| Catalog | AWS Glue Data Catalog | ⚠️ license-blocked → bridged to a direct JDBC read/write (see *Known gaps*) | $0 |
 | Orchestration (Day 2) | Step Functions + Lambda | LocalStack Step Functions + Lambda | $0 |
 | Notifications (Day 2) | SES | LocalStack SES | $0 |
 
@@ -33,6 +35,7 @@ cp infra/localstack/.env.example infra/localstack/.env
 $EDITOR infra/localstack/.env          # paste LOCALSTACK_AUTH_TOKEN=...
 
 # 2. Start LocalStack (S3/DynamoDB/Secrets Manager) + the local SQL Server
+#    + the Postgres warehouse stand-in
 docker compose -f infra/localstack/docker-compose.yml up -d
 
 # 3. Load the Tickit schema + data into the SQL container
@@ -57,6 +60,13 @@ And run the Day 2 orchestration — the Step Functions master job that fans out 
 
 ```bash
 infra/localstack/run-master-job.sh          # NT_Accelerate_Datalake_Master_Job
+```
+
+Then the Day 3 master jobs (Delta + warehouse), in order — see [Running the Day 3 orchestration locally](#running-the-day-3-orchestration-locally):
+
+```bash
+infra/localstack/run-master-job.sh NT_Accelerate_LakeHouse_Master_Job
+infra/localstack/run-master-job.sh NT_Accelerate_RedshiftDW_Master_Job
 ```
 
 When you are done:
@@ -93,19 +103,20 @@ That is the whole reason this guide exists: **Glue and RDS are the expensive par
 
 ### Services
 
-[`infra/localstack/docker-compose.yml`](../infra/localstack/docker-compose.yml) defines three services on one network:
+[`infra/localstack/docker-compose.yml`](../infra/localstack/docker-compose.yml) defines four services on one network:
 
 | Service | Image | What it is | Started by |
 |---------|-------|------------|------------|
 | `localstack` | `localstack/localstack` | S3, DynamoDB, Secrets Manager, **Lambda, Step Functions, SES, EventBridge** on `localhost:4566` | `up -d` |
 | `sqlserver` | `mcr.microsoft.com/azure-sql-edge` | The source database on `localhost:1433` | `up -d` |
+| `postgres` | `postgres:18` | The Day 3 warehouse stand-in for Redshift on `localhost:5432` | `up -d` |
 | `glue` | `public.ecr.aws/glue/aws-glue-libs:glue_libs_4.0.0_image_01` | The Glue/Spark runtime the jobs execute in | `run-glue.sh` (profile `tools`) |
 
 Two design choices matter:
 
-**The `glue` service is behind a profile.** A plain `docker compose up -d` starts only the two long-running services; the job container (a 9 GB image) is started on demand by `run-glue.sh`, which shells out to `docker compose run`. Because everything is on the same compose network, the job reaches LocalStack at `http://localstack:4566` and the database at `sqlserver:1433` **by service name** — no `host.docker.internal`, no host networking.
+**The `glue` service is behind a profile.** A plain `docker compose up -d` starts only the three long-running services; the job container (a 9 GB image) is started on demand by `run-glue.sh`, which shells out to `docker compose run`. Because everything is on the same compose network, the job reaches LocalStack at `http://localstack:4566`, the database at `sqlserver:1433`, and the warehouse at `postgres:5432` **by service name** — no `host.docker.internal`, no host networking.
 
-**The resources are created by init hooks, not by Terraform.** LocalStack runs every script in `/etc/localstack/init/ready.d/` in name order once its API is up. [`init/01-provision.sh`](../infra/localstack/init/01-provision.sh) creates the Day 1 S3 bucket and its objects, the four DynamoDB control tables and their seed rows, and the JDBC credentials secret. [`init/02-day2.sh`](../infra/localstack/init/02-day2.sh) then provisions the Day 2 control plane: the two new control tables (`MASTER_JOB_CONFIG`, `Mail_Config`), the Day 2 superset of the `JOB_CONFIG` rows, the two IAM roles, the SES identities, the nine orchestration Lambdas (+ two local Glue stand-ins, the bridge and the stub), and the three Step Functions master jobs. Both are idempotent, so restarts are safe.
+**The resources are created by init hooks, not by Terraform.** LocalStack runs every script in `/etc/localstack/init/ready.d/` in name order once its API is up. [`init/01-provision.sh`](../infra/localstack/init/01-provision.sh) creates the Day 1 S3 bucket and its objects, the four DynamoDB control tables and their seed rows, and the JDBC credentials secret. [`init/02-day2.sh`](../infra/localstack/init/02-day2.sh) then provisions the Day 2 control plane: the two new control tables (`MASTER_JOB_CONFIG`, `Mail_Config`), the Day 2 superset of the `JOB_CONFIG` rows, the two IAM roles, the SES identities, the nine orchestration Lambdas (+ two local Glue stand-ins, the bridge and the stub), and the three Step Functions master jobs. [`init/03-day3.sh`](../infra/localstack/init/03-day3.sh) finishes the job: it adds the gold Delta prefix and the twelve Day 3 `JOB_CONFIG` rows (six `LAKEHOUSE`, six `DW`) plus the two extra `MASTER_JOB_CONFIG` rows the Day 3 master jobs read. All three are idempotent, so restarts are safe.
 
 ### Files
 
@@ -115,15 +126,17 @@ Two design choices matter:
 | `infra/localstack/.env.example` | Config template (copy to `.env`) |
 | `infra/localstack/init/01-provision.sh` | LocalStack init hook — S3 + DynamoDB + Secrets Manager |
 | `infra/localstack/init/02-day2.sh` | LocalStack init hook — Day 2 tables, Lambdas, state machines |
+| `infra/localstack/init/03-day3.sh` | LocalStack init hook — Day 3 gold prefix, `JOB_CONFIG` + `MASTER_JOB_CONFIG` rows |
 | `infra/localstack/day1/sitecustomize.py` | Day 1 — routes boto3 + rewrites the JDBC secret |
-| `infra/localstack/day1/local_glue_runner.py` | Day 1 — `glueparquet` → `parquet`, catalog → JDBC |
+| `infra/localstack/day1/local_glue_runner.py` | Day 1/3 — `glueparquet` → `parquet`, catalog → JDBC, Redshift → Postgres, Parquet `recursiveFileLookup` |
 | `infra/localstack/day2/glue_bridge.py` | Day 2 — queues each Glue step for the local agent (bridge mode; not deployed to AWS) |
 | `infra/localstack/day2/glue_job_defaults.json` | Day 2 — the jobs' static Glue `DefaultArguments`, merged by the bridge |
 | `infra/localstack/day2/glue_stub.py` | Day 2 — instant stand-in for the Glue step (stub mode; not deployed to AWS) |
 | `infra/localstack/day2/transform_sfn.py` | Day 2 — rewrites a master-job JSON for local (Glue→bridge/stub, real ARNs) |
-| `infra/localstack/run-glue.sh` | Runs a Day 1 Glue job via `docker compose run` |
+| `infra/localstack/run-glue.sh` | Runs a Day 1 / Day 3 Glue job via `docker compose run` |
+| `infra/localstack/fetch-jars.sh` | Day 3 — downloads the Delta 2.3.0 JARs into `jars/` (called by `run-glue.sh`) |
 | `infra/localstack/run-glue-agent.sh` | Day 2 — drains the Glue hand-off queue and runs the real jobs |
-| `infra/localstack/run-master-job.sh` | Runs a Day 2 Step Functions master job |
+| `infra/localstack/run-master-job.sh` | Runs a Day 2 / Day 3 Step Functions master job |
 | `infra/localstack/seed-sql.sh` | Loads Tickit into the SQL container (host side) |
 
 ### Configuration
@@ -134,6 +147,7 @@ Everything is optional except the token. Compose reads `infra/localstack/.env` a
 |----------|---------|-------|
 | `LOCALSTACK_AUTH_TOKEN` | — | **Required.** Free token from app.localstack.cloud |
 | `MSSQL_SA_PASSWORD` | `MyPass123!` | Password for the container's `sa` login (local throwaway) |
+| `PG_PASSWORD` | `MyPass123!` | Password for the warehouse Postgres `postgres` login (local throwaway) |
 | `BUCKET_NAME` | `ntaccelerate-hoang-985176` | The bucket the jobs read/write |
 | `AWS_DEFAULT_REGION` | `us-east-1` | Region the stack pretends to be in |
 | `MAIL_SENDER` | `elt.sender@example.com` | Day 2 notification sender (verified in SES) |
@@ -149,7 +163,7 @@ Everything is optional except the token. Compose reads `infra/localstack/.env` a
 The local path was deliberately built so that **no `.tf` or `.py` file changes behaviour under `terraform apply`**:
 
 * **The local stack never runs Terraform.** The bucket, tables, and secret are created by the init hook, and Glue/RDS are replaced by containers. That is why this guide needs no `*_override.tf` files — there is nothing to create before a local run and nothing to remember to delete before a real one. (Earlier versions of this harness worked by *overriding* the Terraform config to point at LocalStack; those files are gone.)
-* **The Glue scripts are unmodified.** All four differences between local and cloud are absorbed at runtime, by the two files under `infra/localstack/day1/` (see below), which are mounted read-only into the job container only.
+* **The Glue scripts are unmodified.** Every difference between local and cloud is absorbed at runtime, by the two files under `infra/localstack/day1/` (see below), which are mounted read-only into the job container only.
 * **The one `.py` shared with the cloud path** is [`infra/scripts/batch_seed.py`](../infra/scripts/batch_seed.py), used by both `terraform apply` (against RDS) and `seed-sql.sh` (against the container). Its local-only behaviour is behind an opt-in `--no-encrypt` flag, so the default — and therefore the RDS path — is unchanged.
 
 In short: `git diff` on the Terraform is what you deploy; `infra/localstack/` is a parallel way to run the same jobs.
@@ -164,13 +178,13 @@ The trick is that AWS publishes the **actual Glue runtime** as a container image
 public.ecr.aws/glue/aws-glue-libs:glue_libs_4.0.0_image_01
 ```
 
-Running our `jb_Stg_Extract_*.py` scripts inside it — unmodified — with `spark-submit` gives us the same Glue/Spark behaviour AWS uses, for free. A few small shims make the unmodified scripts work. They intercept everything the job would normally hand to *managed* Glue and point it at a local container instead:
+Running our `jb_Stg_Extract_*.py` (Day 1) and `jb_DW_*` (Day 3) scripts inside it — unmodified — with `spark-submit` gives us the same Glue/Spark behaviour AWS uses, for free. A few small shims make the unmodified scripts work. They intercept everything the job would normally hand to *managed* Glue and point it at a local container instead:
 
 ```mermaid
 flowchart LR
   R["run-glue.sh<br/>(host)"] -->|"docker compose run"| S
   subgraph GC["glue container — AWS Glue 4.0 image"]
-    S["spark-submit"] --> J["jb_Stg_Extract_*.py<br/>run unmodified"]
+    S["spark-submit"] --> J["jb_Stg_Extract_*.py / jb_DW_*.py<br/>run unmodified"]
     J -->|"auto-import"| TS["day1/sitecustomize.py"]
     J -->|"runpy"| LR["day1/local_glue_runner.py"]
   end
@@ -182,12 +196,16 @@ flowchart LR
   subgraph SQ["sqlserver container"]
     DB["Azure SQL Edge<br/>tickit"]
   end
+  subgraph PG["postgres container"]
+    WH["Postgres<br/>warehouse"]
+  end
   J  -->|"Shim 1: fs.s3a.endpoint"| S3
   TS -->|"Shim 2: boto3 endpoint_url"| DDB
   TS -->|"Shim 2: boto3 endpoint_url"| SM
   TS -->|"Shim 2: secret host + user rewrite"| DB
   LR -->|"Shim 4: from_catalog -> JDBC"| DB
-  LR -.->|"Shim 3: glueparquet -> parquet (in-process)"| J
+  LR -->|"Shim 5: from_jdbc_conf -> JDBC (Day 3)"| WH
+  LR -.->|"Shim 3: glueparquet -> parquet / Shim 6: recursiveFileLookup (in-process)"| J
 ```
 
 ### Shim 1 — remap `s3://` to LocalStack's S3A endpoint
@@ -294,6 +312,48 @@ def _from_catalog(self, database=None, table_name=None, **kwargs):
 
 The JDBC connection comes from `LOCAL_CATALOG_JDBC` / `LOCAL_CATALOG_USER` / `LOCAL_CATALOG_PASSWORD` (set in the compose file). With this bridge in place, **every** Day 1 job — the six full-load jobs and the incremental Sales job — runs end-to-end locally against S3 + DynamoDB + the SQL Server container.
 
+### Shim 5 — Redshift `from_jdbc_conf` → direct JDBC write (Day 3)
+
+The six `jb_DW_Redshift_Load_*` jobs load their target through the Glue Data Catalog *connection* `conRedshift_tickit`:
+
+```python
+glueContext.write_dynamic_frame.from_jdbc_conf(
+    frame=dfSource, catalog_connection=var_catalog_con,
+    connection_options={"dbtable": var_tar_table, ...},
+    redshift_tmp_dir=var_redshift_temp, transformation_ctx="redshift_datasink")
+```
+
+There is no catalog locally, and **LocalStack's free tier does not emulate Redshift**, so [`local_glue_runner.py`](../infra/localstack/day1/local_glue_runner.py) patches `DynamicFrameWriter.from_jdbc_conf` to perform a plain Spark JDBC write against the `postgres` container. The preactions (`drop table if exists <target>`) and postactions (`analyze <target>`) are covered by `mode("overwrite")` / skipped:
+
+```python
+(frame.toDF().write.format("jdbc")
+    .option("url", _LOCAL_REDSHIFT).option("dbtable", table)
+    .option("user", os.environ["LOCAL_REDSHIFT_USER"])
+    .option("password", os.environ["LOCAL_REDSHIFT_PASSWORD"])
+    .option("driver", "org.postgresql.Driver").mode("overwrite").save())
+```
+
+The connection comes from `LOCAL_REDSHIFT_JDBC` / `LOCAL_REDSHIFT_USER` / `LOCAL_REDSHIFT_PASSWORD` (set in the compose file). The Postgres JDBC driver ships with the Glue image, so no extra JAR is needed.
+
+### Shim 6 — Parquet reads over a prefix of directories (`recursiveFileLookup`)
+
+The Day 3 jobs read the Day 1 bronze prefix, whose *immediate children are directories* (`lake/bronze/tickit/<table>/<run_date>/`). Against LocalStack S3, Spark's default leaf-file listing finds no files for such a prefix and schema inference fails:
+
+```
+Unable to infer schema for Parquet. It must be specified manually.
+```
+
+Reading a directory that directly contains part-files works, so the failure depends only on the prefix's children being directories — not on naming, and not on S3A (its own `listStatus` enumerates the leaf part-file correctly). [`local_glue_runner.py`](../infra/localstack/day1/local_glue_runner.py) therefore forces `recursiveFileLookup=true` on every `s3://` Parquet read, so Spark descends into the date directories:
+
+```python
+def _parquet(self, *paths, **options):
+    if any(str(p).startswith(("s3://", "s3a://")) for p in paths):
+        options.setdefault("recursiveFileLookup", "true")
+    return _orig_parquet(self, *paths, **options)
+```
+
+The bronze data carries no partition columns (Day 1 writes `partitionKeys: []`), so turning off partition discovery is harmless.
+
 ### Running a job
 
 `run-glue.sh` mounts the Glue scripts, the shared `library/`, the `raw/` landing zone, and `day1/` read-only into the container, runs a **login shell** (so `.bashrc` sets `SPARK_HOME`, `PYTHONPATH`, and `PyGlue.zip`, which `import awsglue` needs), pip-installs the extras the flat-file job needs (`openpyxl==3.0.10`), and finally invokes `spark-submit`:
@@ -325,9 +385,19 @@ infra/localstack/run-glue.sh jb_Stg_Extract_Sales.py \
   --p_src_databaseName tickit --p_src_tableName tickit_dbo_sales \
   --p_tar_databaseName s3://ntaccelerate-hoang-985176/lake/bronze/tickit/ \
   --p_tar_tablename sales
+
+# a Day 3 Delta job (name is the job; the shared script is resolved for you,
+# and the Delta runtime is added automatically)
+infra/localstack/run-glue.sh jb_DW_Delta_Load_DateDim.py \
+  --JOB_NAME jb_DW_Delta_Load_DateDim --p_job_name jb_DW_Delta_Load_DateDim \
+  --p_run_date 2026-11-20 --p_batch_id 1 --p_region us-east-1 \
+  --p_lakehouse_location s3://ntaccelerate-hoang-985176/lake/gold/tickit/ \
+  --p_src_databaseName tickit --p_src_tableName date \
+  --p_tar_databaseName s3://ntaccelerate-hoang-985176/lake/gold/tickit/ \
+  --p_tar_tablename DateDim
 ```
 
-If the stack isn't running yet, `docker compose run` starts it first and waits for both dependencies to report healthy.
+If the stack isn't running yet, `docker compose run` starts it first and waits for all three dependencies to report healthy.
 
 ---
 
@@ -359,7 +429,13 @@ That single execution exercises the whole Day 2 control plane: `Read_Run_Type` b
 
 ### Which master job is runnable
 
-Only `NT_Accelerate_Datalake_Master_Job` (the **Staging** master job). All three master jobs read their own row from `MASTER_JOB_CONFIG`, keyed by `p_masterjob_id` — Datalake is `ID=1`, LakeHouse is `ID=2`, RedshiftDW is `ID=3` — and the lab (and the Terraform module) seed exactly one row, `ID=1`. The other two therefore fail at the very first state (`Read_Run_Type` returns nothing, so `run_type` is unbound) **identically here and in AWS**; seeding rows 2 and 3 yourself is what would let them proceed.
+**All three.** Each master job reads its own row from `MASTER_JOB_CONFIG`, keyed by `p_masterjob_id` — Datalake is `ID=1`, LakeHouse is `ID=2`, RedshiftDW is `ID=3`. In AWS the lab seeds only `ID=1`, so the other two fail at the very first state (`Read_Run_Type` returns nothing, so `run_type` is unbound); the Terraform module under `infra/modules/day3/` seeds IDs 2 and 3, and locally [`init/03-day3.sh`](../infra/localstack/init/03-day3.sh) does the same. So all three are runnable here:
+
+```bash
+infra/localstack/run-master-job.sh                                      # ID=1 Datalake   (staging)
+infra/localstack/run-master-job.sh NT_Accelerate_LakeHouse_Master_Job   # ID=2 LakeHouse  (Day 3 Delta)
+infra/localstack/run-master-job.sh NT_Accelerate_RedshiftDW_Master_Job  # ID=3 RedshiftDW (Day 3 warehouse)
+```
 
 ### Standing in for Glue (bridge vs stub)
 
@@ -441,6 +517,49 @@ docker exec nt-localstack aws --endpoint-url http://localhost:4566 stepfunctions
 **The first bridge-mode run pulls the 9 GB Glue image.** `run-glue-agent.sh` runs each job through `run-glue.sh`, which starts the `glue` service (profile `tools`). If you have not run a Day 1 job yet, that first job waits on the image pull; later runs reuse it.
 
 **SES accepts the mail but does not deliver it.** LocalStack SES records the `SendEmail` call (and rejects unverified senders/recipients, which is why the init hook verifies both addresses), but nothing arrives in a real inbox — the notification is in the execution history, not your mail client.
+
+---
+
+## Running the Day 3 orchestration locally
+
+[Day 3](./day3-lakehouse-transform.md) adds the two **downstream** master jobs — `NT_Accelerate_LakeHouse_Master_Job` (`ID=2`) and `NT_Accelerate_RedshiftDW_Master_Job` (`ID=3`) — and the twelve `jb_DW_*` jobs they fan out. Nothing about the harness changes: the same `run-master-job.sh` runs them, the same `bridge` mode executes the real Spark jobs, and the same `init/03-day3.sh` hook seeds the control rows. The only new pieces are the Delta JARs ([`fetch-jars.sh`](../infra/localstack/fetch-jars.sh), called automatically by `run-glue.sh`) and the Postgres warehouse container (Shim 5).
+
+**Run them in order.** The LakeHouse and RedshiftDW jobs do not read the bronze layer directly — they gate on `NT_Accelerate_Check_Staging_Master_Job_Status`, which passes only once the **staging** (`Datalake`) master job has SUCCEEDED for the *same* `run_date`:
+
+```bash
+# 1. staging first — the Day 3 jobs gate on its success for this run_date
+infra/localstack/run-master-job.sh                                      # NT_Accelerate_Datalake_Master_Job
+
+# 2. then the lakehouse (Delta) master job — fans out 4 dims, then the sales fact
+infra/localstack/run-master-job.sh NT_Accelerate_LakeHouse_Master_Job
+
+# 3. then the warehouse master job — same shape, writing to Postgres
+infra/localstack/run-master-job.sh NT_Accelerate_RedshiftDW_Master_Job
+```
+
+Each of the two Day 3 master jobs runs four dimension jobs in parallel (`DateDim`, `VenueDim`, `CategoryDim`, `UserDim`), then checks the result, then runs the two fact jobs (`EventDim`, `SalesFact`). In bridge mode the `[glue-agent] ...` lines show the real `jb_DW_*` jobs running — the first Delta job also waits on the `fetch-jars.sh` download. `Check_Staging_Master_Job_Status` returns `FailedJobExisting=true` if the staging run is missing or failed, in which case the master job fails fast at the very first choice. A successful run closes exactly like Day 2 (`Update_MasterJob_Status` + `Send_Mail`).
+
+**The Delta jobs need the JARs, and they are fetched once.** `run-glue.sh` calls [`fetch-jars.sh`](../infra/localstack/fetch-jars.sh) before any `jb_DW_Delta_Load_*` job, which downloads Delta **2.3.0** into `infra/localstack/jars/` (gitignored). See [Shim 6](#shim-6--parquet-reads-over-a-prefix-of-directories-recursivefilelookup) above for why the Parquet read is patched, and [Known gaps](#known-gaps) for why 2.3.0 and not a newer Delta.
+
+**The warehouse jobs write to Postgres, not Redshift.** Shim 5 turns each `from_jdbc_conf` call into a plain JDBC write against the `postgres` container. Verify it after a run:
+
+```bash
+# the six warehouse tables, with their row counts
+docker exec nt-postgres psql -U postgres -d tickit -c '\dt'
+docker exec nt-postgres psql -U postgres -d tickit -c \
+  'select (select count(*) from dim_date)    as dim_date,
+          (select count(*) from dim_venue)   as dim_venue,
+          (select count(*) from dim_category) as dim_category,
+          (select count(*) from dim_user)    as dim_user,
+          (select count(*) from dim_event)   as dim_event,
+          (select count(*) from fact_sales)  as fact_sales;'
+
+# the gold Delta tables (a _delta_log/ next to the parquet is the tell)
+docker exec nt-localstack aws --endpoint-url http://localhost:4566 s3 ls --recursive \
+  s3://ntaccelerate-hoang-985176/lake/gold/tickit/
+```
+
+On the machine this guide was written on the counts were `dim_date=365`, `dim_venue=202`, `dim_category=11`, `dim_user=49990`, `dim_event=8659`, `fact_sales=0` — the last one because the Sales fact is fed by the incremental Sales staging job, which is empty on a fresh seed (see [Verifying the whole stack](#verifying-the-whole-stack)). Both Day 3 master jobs and all twelve `jb_DW_*` jobs report `SUCCEEDED`, and `MASTER_JOB_CONFIG` rows 2 and 3 advance their `BATCH_ID`. One detail to expect: each Day 3 master job **truncates the shared `NT_Accelarate_JOB_STATUS` table** as it starts (the `Truncate table JOB_STATUS` state), so after all three runs the table holds only the six `jb_DW_Redshift_Load_*` rows — the Delta rows were overwritten by the warehouse run. That is the lab's own behaviour, not a local artefact; `NT_Accelerate_JOB_LOG` keeps the append-only history across all runs.
 
 ---
 
@@ -576,13 +695,17 @@ docker exec nt-localstack aws --endpoint-url http://localhost:4566 dynamodb upda
 
 ## Known gaps
 
-The local stack is deliberately *not* a full emulator. Three differences are worth remembering:
+The local stack is deliberately *not* a full emulator. Five differences are worth remembering:
 
 **The Glue Data Catalog is license-blocked — bridged, not emulated.** The six full-load jobs read via `create_dynamic_frame.from_catalog`, which needs the catalog LocalStack refuses. Shim 4 in [`local_glue_runner.py`](../infra/localstack/day1/local_glue_runner.py) maps the catalog reference `tickit.tickit_dbo_<table>` to a **direct JDBC read** from the local SQL Server container, keeping the shipped job scripts unmodified. This is a *behavioural substitute*, not a crawler: it assumes the table naming the crawler would have produced and does not exercise schema inference or catalog updates. Everything downstream of the read (transforms, the `glueparquet`/DynamoDB job-logging path, the watermark) runs for real.
 
 **The JDBC credentials are local, so the secret is rewritten in flight.** The Secrets Manager secret mirrors the cloud RDS instance (`admin` @ `localhost:1433`), while the job talks to the local container (`sa` @ `sqlserver:1433`); Shim 2 rewrites both on the way out. That means the incremental path is exercised end-to-end, but the local run does not prove that the cloud secret and the cloud RDS master user agree — apply to real RDS to check that.
 
-**The Day 2 Glue step runs locally through a bridge, not through AWS Glue.** Because LocalStack cannot run Glue, the master jobs' `glue:startJobRun.sync` tasks are rewritten to the bridge ([`glue_bridge.py`](../infra/localstack/day2/glue_bridge.py) + [`run-glue-agent.sh`](../infra/localstack/run-glue-agent.sh)), which hands each job to the *same* local Glue runtime the Day 1 jobs use. The **orchestration** — run modes, the parallel fan-out, status writes, the SES notification — is exercised for real, and so are the **jobs** themselves (real Spark, real `JOB_LOG` / `JOB_STATUS` counts, real parquet). What the local run does *not* prove is the AWS-managed parts of Glue: the Data Catalog read (see above), the optimized `glueparquet` writer, and `glue:startJobRun.sync`'s own retries/concurrency. It also assumes every `--p_catalog_conn`-style argument the state omits is covered by the job's `DefaultArguments` in [`glue_job_defaults.json`](../infra/localstack/day2/glue_job_defaults.json) — a job that relies on a default not listed there would fail locally while succeeding in AWS. `GLUE_MODE=stub` falls back to the older skip-the-job behaviour, where none of this runs.
+**The Day 2 Glue step runs locally through a bridge, not through AWS Glue.** Because LocalStack cannot run Glue, the master jobs' `glue:startJobRun.sync` tasks are rewritten to the bridge ([`glue_bridge.py`](../infra/localstack/day2/glue_bridge.py) + [`run-glue-agent.sh`](../infra/localstack/run-glue-agent.sh)), which hands each job to the *same* local Glue runtime the Day 1 jobs use. The **orchestration** — run modes, the parallel fan-out, status writes, the SES notification — is exercised for real, and so are the **jobs** themselves (real Spark, real `JOB_LOG` / `JOB_STATUS` counts, real parquet). What the local run does *not* prove is the AWS-managed parts of Glue: the Data Catalog read (see above), the optimized `glueparquet` writer, and `glue:startJobRun.sync`'s own retries/concurrency. It also assumes every `--p_catalog_conn`-style argument the state omits is covered by the job's `DefaultArguments` in [`glue_job_defaults.json`](../infra/localstack/day2/glue_job_defaults.json) — a job that relies on a default not listed there would fail locally while succeeding in AWS. `GLUE_MODE=stub` falls back to the older skip-the-job behaviour, where none of this runs. The same applies to the two Day 3 master jobs: they fan out the twelve `jb_DW_*` jobs through the same bridge.
+
+**The Day 3 warehouse is Postgres, not Redshift.** LocalStack's free tier does not emulate Redshift, and a real cluster bills hourly, so Shim 5 rewrites each `from_jdbc_conf` call into a plain Spark JDBC write against the `postgres` container. What that exercises is real: the jobs read bronze Parquet, apply their transforms, and the star-schema tables really appear with the right row counts. What it does **not** exercise is the Redshift-specific half of the write — the `COPY` from S3 and the `redshift_tmp_dir` staging that goes with it — because a Postgres JDBC write never calls `COPY`. The `drop table if exists` / `analyze` pre/post scripts are likewise mapped onto `mode("overwrite")` / skipped. Treat a green local run as proof of the transform logic, not of the Redshift load path; the Redshift module is also gated behind `infra/modules/day3`'s enable flag, so on the cloud path it is only deployed when you ask for it.
+
+**Delta runs from a fetched JAR, not the lab's bundle.** The Day 3 Terraform module ships `library/delta-spark_2.13-4.1.0.jar`, a Scala 2.13 / Spark 4.x build — which the local Glue image, and AWS Glue 4.0 itself, cannot load (they are Scala 2.12 / Spark 3.3). [`fetch-jars.sh`](../infra/localstack/fetch-jars.sh) therefore pulls **Delta 2.3.0** (`delta-core_2.12` + `delta-storage_2.12`) from Maven instead; Delta 2.4.0 is also rejected on this runtime, because it references `Empty2Null`, which the Glue image's Amazon-forked Spark does not ship. 2.3.0 is the newest build that runs cleanly. The Delta *protocol* the jobs exercise is the same, but the local run does not prove the cloud-side `--extra-jars` wiring against a real S3-hosted JAR.
 
 ---
 
@@ -593,8 +716,10 @@ The local stack is deliberately *not* a full emulator. Three differences are wor
 | RDS `db.t3.micro` (~2 hr) | ~$0.03 | $0 |
 | Glue crawler (~5 min) | ~$0.17 | $0 |
 | 7 Glue jobs (~5 min each) | ~$0.50 | $0 |
+| 12 `jb_DW_*` jobs (Day 3) | ~$0.60 | $0 |
+| Redshift `dc2.large` (~2 hr, Day 3) | ~$0.50 | $0 |
 | S3 + DynamoDB + Secrets Manager | ~$0.02 | $0 |
-| **Total** | **~$0.75 / session** | **$0** |
+| **Total** | **~$1.80 / session** | **$0** |
 
 The cloud number is small, which is exactly why people are tempted to skip local development. But the cloud number repeats every time you change a script, and the *latency* cost — `terraform apply`, wait for an instance, wait for a job to start — is what actually slows you down. Local is $0 and instant.
 
@@ -606,7 +731,7 @@ The cloud number is small, which is exactly why people are tempted to skip local
 docker compose -f infra/localstack/docker-compose.yml down
 ```
 
-The job container uses `--rm`, so it discards itself after each run. `down` removes both long-running containers and the network. **LocalStack keeps no state between runs** — the next `up` starts from a clean slate and the init hook provisions the S3 bucket, tables, and secret again. **The SQL Server's Tickit data does persist**, because it lives in the named volume `sqlserver-data`; that is what makes `seed-sql.sh` a one-time step. To wipe the database too:
+The job container uses `--rm`, so it discards itself after each run. `down` removes the three long-running containers and the network. **LocalStack keeps no state between runs** — the next `up` starts from a clean slate and the init hook provisions the S3 bucket, tables, and secret again. **The two databases do persist**, because they live in named volumes: the SQL Server's Tickit data in `sqlserver-data` (that is what makes `seed-sql.sh` a one-time step) and the Day 3 warehouse tables in `warehouse-data`. To wipe both too, drop the volumes as well:
 
 ```bash
 docker compose -f infra/localstack/docker-compose.yml down -v
@@ -614,4 +739,4 @@ docker compose -f infra/localstack/docker-compose.yml down -v
 
 ---
 
-*This guide documents the local harness behind the [Day 1 ingestion post](./day1-ingestion.md) and the [Day 2 orchestration post](./day2-orchestration.md). The harness lives in [`infra/localstack/`](../infra/localstack/), with the shared seeding helper in [`infra/scripts/batch_seed.py`](../infra/scripts/batch_seed.py).*
+*This guide documents the local harness behind the [Day 1 ingestion post](./day1-ingestion.md), the [Day 2 orchestration post](./day2-orchestration.md), and the [Day 3 transform post](./day3-lakehouse-transform.md). The harness lives in [`infra/localstack/`](../infra/localstack/), with the shared seeding helper in [`infra/scripts/batch_seed.py`](../infra/scripts/batch_seed.py).*
