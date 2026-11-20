@@ -164,7 +164,31 @@ The trick is that AWS publishes the **actual Glue runtime** as a container image
 public.ecr.aws/glue/aws-glue-libs:glue_libs_4.0.0_image_01
 ```
 
-Running our `jb_Stg_Extract_*.py` scripts inside it — unmodified — with `spark-submit` gives us the same Glue/Spark behaviour AWS uses, for free. A few small shims make the unmodified scripts work.
+Running our `jb_Stg_Extract_*.py` scripts inside it — unmodified — with `spark-submit` gives us the same Glue/Spark behaviour AWS uses, for free. A few small shims make the unmodified scripts work. They intercept everything the job would normally hand to *managed* Glue and point it at a local container instead:
+
+```mermaid
+flowchart LR
+  R["run-glue.sh<br/>(host)"] -->|"docker compose run"| S
+  subgraph GC["glue container — AWS Glue 4.0 image"]
+    S["spark-submit"] --> J["jb_Stg_Extract_*.py<br/>run unmodified"]
+    J -->|"auto-import"| TS["day1/sitecustomize.py"]
+    J -->|"runpy"| LR["day1/local_glue_runner.py"]
+  end
+  subgraph LSC["LocalStack container"]
+    S3["S3"]
+    DDB["DynamoDB"]
+    SM["Secrets Manager"]
+  end
+  subgraph SQ["sqlserver container"]
+    DB["Azure SQL Edge<br/>tickit"]
+  end
+  J  -->|"Shim 1: fs.s3a.endpoint"| S3
+  TS -->|"Shim 2: boto3 endpoint_url"| DDB
+  TS -->|"Shim 2: boto3 endpoint_url"| SM
+  TS -->|"Shim 2: secret host + user rewrite"| DB
+  LR -->|"Shim 4: from_catalog -> JDBC"| DB
+  LR -.->|"Shim 3: glueparquet -> parquet (in-process)"| J
+```
 
 ### Shim 1 — remap `s3://` to LocalStack's S3A endpoint
 
@@ -340,6 +364,30 @@ Only `NT_Accelerate_Datalake_Master_Job` (the **Staging** master job). All three
 ### Standing in for Glue (bridge vs stub)
 
 A master job's parallel branches each end in a `glue:startJobRun.sync` task, and **LocalStack's free tier cannot run Glue** (`Sorry, the glue service is not included within your LocalStack license`). So [`day2/transform_sfn.py`](../infra/localstack/day2/transform_sfn.py) rewrites the shipped master-job JSON at init time — every hardcoded ARN in it (the lab account `377414509754`) becomes the ARN LocalStack actually assigned, and each Glue state is redirected to a local stand-in. `GLUE_MODE` chooses which, and how:
+
+```mermaid
+flowchart TB
+  subgraph cloud["In AWS — unchanged"]
+    C1["Step Functions master job"] --> C2["glue:startJobRun.sync<br/>to a real AWS Glue job"]
+  end
+
+  subgraph LOCAL["Local — transform_sfn.py rewrites each Glue state at init"]
+    S1["state: lambda:invoke.waitForTaskToken"]
+    B["glue_bridge.py<br/>merge DefaultArguments + state args -> ARGS"]
+    Q["NT_Accelerate_LocalGlueQueue<br/>ARGS, TASK_TOKEN, STATUS=PENDING"]
+    AG["run-glue-agent.sh<br/>claim row atomically"]
+    G["run-glue.sh -> real Spark job<br/>writes JOB_LOG / JOB_STATUS"]
+    S1 -->|"JobName, args, task_token"| B
+    B -->|"queue + return<br/>(execution pauses on the token)"| Q
+    AG -->|"scan / claim"| Q
+    AG --> G
+    AG -->|"SendTaskSuccess / SendTaskFailure"| S1
+  end
+
+  LIC["LocalStack free tier<br/>glue service is not included in your license"]
+  LIC -.->|"so glue:startJobRun.sync can never run"| S1
+  S1 -.->|"GLUE_MODE=stub instead"| ST["glue_stub.py<br/>writes placeholder SUCCEEDED rows, no job runs"]
+```
 
 **`bridge` (the default) — the jobs actually run.** Each `glue:startJobRun.sync` state becomes a `lambda:invoke.waitForTaskToken` of [`glue_bridge.py`](../infra/localstack/day2/glue_bridge.py). The bridge merges the job's *static* Glue arguments — the `DefaultArguments` from `infra/modules/day1/glue_jobs.tf`, shipped to it as [`glue_job_defaults.json`](../infra/localstack/day2/glue_job_defaults.json) — with the arguments the state computed, the state winning, exactly as the Glue service does. That merge is not cosmetic: the state passes `--catalog_conn`, but every job script reads `--p_catalog_conn`, so only the defaults close the gap. The bridge then files the merged arguments, the job name and the Step Functions task token as a `PENDING` row in `NT_Accelerate_LocalGlueQueue` and returns; the execution stays **paused on its task token**.
 

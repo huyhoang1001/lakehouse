@@ -8,6 +8,61 @@ This series documents the AWS TechCamp 2022 lakehouse built as Infrastructure-as
 | [Day 2](./day2-orchestration.md) | Orchestration — master job, Step Functions, Lambda, SES notifications | ✅ Implemented |
 | Day 3 | Transform, gold layer, Redshift migration | 🔜 Planned |
 
+## Architecture
+
+An end-to-end lakehouse following the medallion best practice. Data is ingested from the source system into a **bronze** layer, progressively refined through **silver** and **gold**, and served to analytics — with cataloguing, orchestration, and run metadata applied consistently at every layer.
+
+```mermaid
+flowchart LR
+  subgraph SRC["Data sources"]
+    RDS[("RDS SQL Server<br/>Tickit OLTP")]
+  end
+
+  subgraph ING["Ingestion"]
+    GLUE["AWS Glue — Spark<br/>JDBC extract jobs"]
+    SECRETS["Secrets Manager<br/>credentials"]
+  end
+
+  subgraph LAKE["Data lake — medallion layers (S3)"]
+    BRONZE[("Bronze<br/>raw Parquet")]
+    SILVER[("Silver<br/>cleaned · conformed<br/>Delta Lake")]
+    GOLD[("Gold<br/>curated · aggregated<br/>Delta Lake")]
+  end
+
+  subgraph SERV["Serving"]
+    RS[("Amazon Redshift<br/>warehouse")]
+    BI["BI · SQL analytics · ML"]
+  end
+
+  subgraph GOV["Catalog & governance"]
+    CATALOG["Glue Data Catalog<br/>crawlers · schema"]
+  end
+
+  subgraph OPS["Orchestration & metadata — cross-cutting"]
+    SFN["Step Functions<br/>master jobs"]
+    DDB["DynamoDB<br/>JOB_CONFIG · JOB_LOG<br/>JOB_STATUS · WATERMARK"]
+    SES["SES<br/>run notifications"]
+  end
+
+  RDS -->|"JDBC"| GLUE
+  SECRETS -.->|"credentials"| GLUE
+  GLUE -->|"write Parquet"| BRONZE
+  BRONZE -->|"clean · conform"| SILVER
+  SILVER -->|"model · aggregate"| GOLD
+  GOLD -->|"load"| RS
+  GOLD -->|"query"| BI
+  RS -->|"query"| BI
+
+  CATALOG -.->|"schema"| BRONZE
+  CATALOG -.->|"schema"| SILVER
+  CATALOG -.->|"schema"| GOLD
+
+  SFN -.->|"start jobs"| GLUE
+  SFN -.->|"read / write state"| DDB
+  GLUE -.->|"log · watermark"| DDB
+  SFN -.->|"notify"| SES
+```
+
 ## Guides
 
 | Guide | Topic |
