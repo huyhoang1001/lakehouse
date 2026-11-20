@@ -15,10 +15,19 @@
 #   sfn.tf       -> the three Step Functions master jobs
 #
 # ONE DELIBERATE DIFFERENCE from Terraform: LocalStack's free tier cannot run
-# Glue, so every `glue:startJobRun.sync` state in the master jobs is rewritten
-# to invoke a stub Lambda that records the JOB_LOG / JOB_STATUS rows a real Glue
-# job would write (see day2/glue_stub.py and day2/transform_sfn.py). The
-# Terraform path is untouched -- it deploys the Glue states verbatim.
+# Glue, so every `glue:startJobRun.sync` state in the master jobs is rewritten to
+# call a local Lambda instead; the Terraform path is untouched and deploys the
+# Glue states verbatim. Which stand-in, and how it is wired, is GLUE_MODE:
+#
+#   bridge (default)  the states become lambda:invoke.waitForTaskToken of
+#                     glue_bridge.py, which queues the job in
+#                     NT_Accelerate_LocalGlueQueue and leaves the execution
+#                     paused. run-glue-agent.sh drains that queue and runs each
+#                     job for real with run-glue.sh, then resumes the execution.
+#                     Real glue scripts, real JOB_LOG / JOB_STATUS rows.
+#   stub              the states become a plain lambda:invoke of glue_stub.py,
+#                     which just records SUCCEEDED rows itself. No Glue job
+#                     runs, but the orchestration is exercised in seconds.
 # -----------------------------------------------------------------------------
 set -euo pipefail
 
@@ -29,7 +38,10 @@ SFN_SRC="${DAY2_SFN_DIR:-/opt/day2-sfn}"
 HELPERS="${DAY2_HELPERS_DIR:-/opt/day2}"
 MAIL_SENDER="${MAIL_SENDER:-elt.sender@example.com}"
 MAIL_RECEIVERS="${MAIL_RECEIVERS:-elt.receiver@example.com}"
+GLUE_MODE="${GLUE_MODE:-bridge}"
 STUB_FUNCTION="NT_Accelerate_Local_Glue_Stub"
+BRIDGE_FUNCTION="NT_Accelerate_Local_Glue_Bridge"
+QUEUE_TABLE="NT_Accelerate_LocalGlueQueue"
 
 log() { echo "[init-day2] $*"; }
 
@@ -57,6 +69,13 @@ ddb_create NT_Accelerate_MASTER_JOB_CONFIG \
 # Mail_Config's key is a STRING, not a number: NT_Accelerate_Send_Mail scans it
 # with Key('ID').eq(str("1")). An N key would never match.
 ddb_create NT_Accelerate_Mail_Config \
+  --attribute-definitions AttributeName=ID,AttributeType=S \
+  --key-schema AttributeName=ID,KeyType=HASH \
+  --billing-mode PAY_PER_REQUEST
+
+# Not in Terraform: the glue_bridge.py -> run-glue-agent.sh hand-off queue (see
+# the header). It holds one row per Glue state that is waiting on a local job.
+ddb_create "$QUEUE_TABLE" \
   --attribute-definitions AttributeName=ID,AttributeType=S \
   --key-schema AttributeName=ID,KeyType=HASH \
   --billing-mode PAY_PER_REQUEST
@@ -178,13 +197,17 @@ lambda_names=(
   NT_Accelerate_Send_Mail
 )
 
-# The container has python3 but no `zip` binary, so package with zipfile.
+# The container has python3 but no `zip` binary, so package with zipfile. Any
+# extra paths are stored under their basename, which is how the bridge Lambda
+# gets its glue_job_defaults.json (its container does not inherit our mounts).
 zip_one() {
-  python3 - "$1" "$2" "$3" <<'PY'
-import sys, zipfile
+  python3 - "$@" <<'PY'
+import os, sys, zipfile
 src, entry, out = sys.argv[1:4]
 with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as zf:
     zf.write(src, f"{entry}.py")
+    for extra in sys.argv[4:]:
+        zf.write(extra, os.path.basename(extra))
 PY
 }
 
@@ -210,8 +233,9 @@ wait_lambda_active() {
 
 deploy_lambda() {
   local name="$1" src="$2" entry="$3"
+  shift 3
   local zip="/tmp/${name}.zip"
-  zip_one "$src" "$entry" "$zip"
+  zip_one "$src" "$entry" "$zip" "$@"
   if awsl lambda get-function --function-name "$name" >/dev/null 2>&1; then
     awsl lambda update-function-code --function-name "$name" --zip-file "fileb://$zip" >/dev/null
     log "updated Lambda $name"
@@ -232,8 +256,11 @@ for name in "${lambda_names[@]}"; do
   deploy_lambda "$name" "$LAMBDA_SRC/${name}.py" "$name"
 done
 
-# The local Glue stand-in -- not part of the Terraform deployment.
+# The local Glue stand-ins -- not part of the Terraform deployment. Both are
+# always deployed; GLUE_MODE decides which one the master jobs call.
 deploy_lambda "$STUB_FUNCTION" "$HELPERS/glue_stub.py" "glue_stub"
+deploy_lambda "$BRIDGE_FUNCTION" "$HELPERS/glue_bridge.py" "glue_bridge" \
+  "$HELPERS/glue_job_defaults.json"
 
 # --- Step Functions master jobs ----------------------------------------------
 # Map each function to the ARN LocalStack actually assigned it, so the rewritten
@@ -250,12 +277,21 @@ arns_file=/tmp/day2_lambda_arns.json
   printf '}'
 } >"$arns_file"
 
-stub_arn="$(awsl lambda get-function --function-name "$STUB_FUNCTION" --query Configuration.FunctionArn --output text)"
+lambda_arn() {
+  awsl lambda get-function --function-name "$1" --query Configuration.FunctionArn --output text
+}
+
+# Which stand-in the Glue states get, and how transform_sfn.py should wire it.
+case "$GLUE_MODE" in
+  bridge) glue_arn="$(lambda_arn "$BRIDGE_FUNCTION")"; mode_flag="--callback" ;;
+  stub)   glue_arn="$(lambda_arn "$STUB_FUNCTION")";   mode_flag="--stub" ;;
+  *) log "ERROR: GLUE_MODE must be 'bridge' or 'stub' (got '$GLUE_MODE')"; exit 1 ;;
+esac
 
 create_state_machine() {
   local name="$1" def_file="$2" out existing
   out="/tmp/${name}.json"
-  python3 "$HELPERS/transform_sfn.py" "$SFN_SRC/$def_file" "$out" "$stub_arn" "$arns_file"
+  python3 "$HELPERS/transform_sfn.py" "$SFN_SRC/$def_file" "$out" "$glue_arn" "$arns_file" "$mode_flag"
 
   existing="$(awsl stepfunctions list-state-machines \
     --query "stateMachines[?name=='$name'].stateMachineArn" --output text)"
@@ -276,4 +312,8 @@ create_state_machine NT_Accelerate_Datalake_Master_Job   "Edit NT_Accelerate_Dat
 create_state_machine NT_Accelerate_LakeHouse_Master_Job  "Edit NT_Accelerate_LakeHouse_Master_Job.json"
 create_state_machine NT_Accelerate_RedshiftDW_Master_Job "Edit NT_Accelerate_RedshiftDW_Master_Job.json"
 
-log "ready: 2 Day 2 tables, 10 Lambdas (9 + stub), 3 state machines"
+log "ready: 3 Day 2 tables, 11 Lambdas (9 + 2 local Glue stand-ins), 3 state machines"
+log "Glue states are wired to '$GLUE_MODE' mode"
+if [ "$GLUE_MODE" = "bridge" ]; then
+  log "run ./run-glue-agent.sh (or just ./run-master-job.sh) to execute the real jobs"
+fi

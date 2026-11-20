@@ -105,7 +105,7 @@ Two design choices matter:
 
 **The `glue` service is behind a profile.** A plain `docker compose up -d` starts only the two long-running services; the job container (a 9 GB image) is started on demand by `run-glue.sh`, which shells out to `docker compose run`. Because everything is on the same compose network, the job reaches LocalStack at `http://localstack:4566` and the database at `sqlserver:1433` **by service name** — no `host.docker.internal`, no host networking.
 
-**The resources are created by init hooks, not by Terraform.** LocalStack runs every script in `/etc/localstack/init/ready.d/` in name order once its API is up. [`init/01-provision.sh`](../infra/localstack/init/01-provision.sh) creates the Day 1 S3 bucket and its objects, the four DynamoDB control tables and their seed rows, and the JDBC credentials secret. [`init/02-day2.sh`](../infra/localstack/init/02-day2.sh) then provisions the Day 2 control plane: the two new control tables (`MASTER_JOB_CONFIG`, `Mail_Config`), the Day 2 superset of the `JOB_CONFIG` rows, the two IAM roles, the SES identities, the nine orchestration Lambdas (+ the local Glue stub), and the three Step Functions master jobs. Both are idempotent, so restarts are safe.
+**The resources are created by init hooks, not by Terraform.** LocalStack runs every script in `/etc/localstack/init/ready.d/` in name order once its API is up. [`init/01-provision.sh`](../infra/localstack/init/01-provision.sh) creates the Day 1 S3 bucket and its objects, the four DynamoDB control tables and their seed rows, and the JDBC credentials secret. [`init/02-day2.sh`](../infra/localstack/init/02-day2.sh) then provisions the Day 2 control plane: the two new control tables (`MASTER_JOB_CONFIG`, `Mail_Config`), the Day 2 superset of the `JOB_CONFIG` rows, the two IAM roles, the SES identities, the nine orchestration Lambdas (+ two local Glue stand-ins, the bridge and the stub), and the three Step Functions master jobs. Both are idempotent, so restarts are safe.
 
 ### Files
 
@@ -117,9 +117,12 @@ Two design choices matter:
 | `infra/localstack/init/02-day2.sh` | LocalStack init hook — Day 2 tables, Lambdas, state machines |
 | `infra/localstack/day1/sitecustomize.py` | Day 1 — routes boto3 + rewrites the JDBC secret |
 | `infra/localstack/day1/local_glue_runner.py` | Day 1 — `glueparquet` → `parquet`, catalog → JDBC |
-| `infra/localstack/day2/glue_stub.py` | Day 2 — local stand-in for the Glue step (not deployed to AWS) |
-| `infra/localstack/day2/transform_sfn.py` | Day 2 — rewrites a master-job JSON for local (Glue→stub, real ARNs) |
+| `infra/localstack/day2/glue_bridge.py` | Day 2 — queues each Glue step for the local agent (bridge mode; not deployed to AWS) |
+| `infra/localstack/day2/glue_job_defaults.json` | Day 2 — the jobs' static Glue `DefaultArguments`, merged by the bridge |
+| `infra/localstack/day2/glue_stub.py` | Day 2 — instant stand-in for the Glue step (stub mode; not deployed to AWS) |
+| `infra/localstack/day2/transform_sfn.py` | Day 2 — rewrites a master-job JSON for local (Glue→bridge/stub, real ARNs) |
 | `infra/localstack/run-glue.sh` | Runs a Day 1 Glue job via `docker compose run` |
+| `infra/localstack/run-glue-agent.sh` | Day 2 — drains the Glue hand-off queue and runs the real jobs |
 | `infra/localstack/run-master-job.sh` | Runs a Day 2 Step Functions master job |
 | `infra/localstack/seed-sql.sh` | Loads Tickit into the SQL container (host side) |
 
@@ -135,6 +138,7 @@ Everything is optional except the token. Compose reads `infra/localstack/.env` a
 | `AWS_DEFAULT_REGION` | `us-east-1` | Region the stack pretends to be in |
 | `MAIL_SENDER` | `elt.sender@example.com` | Day 2 notification sender (verified in SES) |
 | `MAIL_RECEIVERS` | `elt.receiver@example.com` | Day 2 notification recipients (comma-separated) |
+| `GLUE_MODE` | `bridge` | How the Day 2 Glue steps are stood in for (`bridge` or `stub`); only read on the next `up` |
 
 `.env` is gitignored; `.env.example` is committed. Everything else — image, mounts, endpoints, credentials — is wired in the compose file.
 
@@ -305,7 +309,7 @@ If the stack isn't running yet, `docker compose run` starts it first and waits f
 
 ## Running the Day 2 orchestration locally
 
-[Day 2](./day2-orchestration.md) adds the control plane: three Step Functions **master jobs**, nine Lambda functions, six DynamoDB control tables, and an SES notification. LocalStack's free tier runs Step Functions, Lambda and SES, so the orchestration itself is emulated for real — the *one* thing it cannot run is the Glue job each branch calls, and that gap is stubbed (below).
+[Day 2](./day2-orchestration.md) adds the control plane: three Step Functions **master jobs**, nine Lambda functions, six DynamoDB control tables, and an SES notification. LocalStack's free tier runs Step Functions, Lambda and SES, so the orchestration itself is emulated for real. The *one* thing it cannot run is the Glue job each branch calls — by default the harness **bridges** each of those steps out to the local Glue runtime, so the seven extraction jobs really execute (see [Standing in for Glue](#standing-in-for-glue-bridge-vs-stub) below).
 
 Run the master job from the host — the `aws` CLI executes *inside* the LocalStack container, so nothing needs installing locally:
 
@@ -313,28 +317,37 @@ Run the master job from the host — the `aws` CLI executes *inside* the LocalSt
 infra/localstack/run-master-job.sh          # NT_Accelerate_Datalake_Master_Job (default)
 ```
 
-It starts one execution named `local-<date>-<time>`, polls `describe-execution` every 2s, and prints the per-state error and exits non-zero if the run fails. A successful run looks like:
+It starts one execution named `local-<date>-<time>` and polls `describe-execution` every 2s, printing `... still RUNNING (Ns)` while it waits and the per-state error if the run fails. In the default bridge mode it also starts [`run-glue-agent.sh`](../infra/localstack/run-glue-agent.sh) in the background, so each job's start/finish is echoed as `[glue-agent] ...` and the whole run takes as long as the seven Spark jobs do (a few minutes). A successful run looks like:
 
 ```
+[glue-agent] watching NT_Accelerate_LocalGlueQueue (concurrency 2, forever)
 state machine : NT_Accelerate_Datalake_Master_Job
-execution     : arn:aws:states:us-east-1:000000000000:execution:NT_Accelerate_Datalake_Master_Job:local-20261118-163902
+execution     : arn:aws:states:us-east-1:000000000000:execution:NT_Accelerate_Datalake_Master_Job:local-20261120-142738
+[glue-agent] start  jb_Stg_Extract_Users (...)
+[glue-agent] start  jb_Stg_Extract_Sales (...)
+  ... still RUNNING (10s)
+[glue-agent] done   jb_Stg_Extract_Sales (...) SUCCEEDED  -- log: /tmp/nt-glue-agent/...
+...
 status        : SUCCEEDED
 ```
 
-That single execution exercises the whole Day 2 control plane: `Read_Run_Type` bumps `BATCH_ID` in `MASTER_JOB_CONFIG`, `Check_Job_Status` / `Is_Allow_Running` / `Check_Job_ReRun` gate the run, the seven `jb_Stg_Extract_*` branches fan out in parallel, `Update_Job_Status` writes each result, `Update_MasterJob_Status` closes the run, and `Send_Mail` builds the HTML digest against SES.
+That single execution exercises the whole Day 2 control plane: `Read_Run_Type` bumps `BATCH_ID` in `MASTER_JOB_CONFIG`, `Check_Job_Status` / `Is_Allow_Running` / `Check_Job_ReRun` gate the run, the seven `jb_Stg_Extract_*` branches fan out in parallel, `Update_Job_Status` writes each result, `Update_MasterJob_Status` closes the run, and `Send_Mail` builds the HTML digest against SES. In bridge mode the `JOB_LOG` / `JOB_STATUS` rows those branches gate on are written by the **real** Spark jobs, not by a stand-in.
 
 ### Which master job is runnable
 
 Only `NT_Accelerate_Datalake_Master_Job` (the **Staging** master job). All three master jobs read their own row from `MASTER_JOB_CONFIG`, keyed by `p_masterjob_id` — Datalake is `ID=1`, LakeHouse is `ID=2`, RedshiftDW is `ID=3` — and the lab (and the Terraform module) seed exactly one row, `ID=1`. The other two therefore fail at the very first state (`Read_Run_Type` returns nothing, so `run_type` is unbound) **identically here and in AWS**; seeding rows 2 and 3 yourself is what would let them proceed.
 
-### The Glue stub
+### Standing in for Glue (bridge vs stub)
 
-A master job's parallel branches each end in a `glue:startJobRun.sync` task, and **LocalStack's free tier cannot run Glue** (`Sorry, the glue service is not included within your LocalStack license`). Rather than skip the step, [`day2/transform_sfn.py`](../infra/localstack/day2/transform_sfn.py) rewrites the shipped master-job JSON at init time:
+A master job's parallel branches each end in a `glue:startJobRun.sync` task, and **LocalStack's free tier cannot run Glue** (`Sorry, the glue service is not included within your LocalStack license`). So [`day2/transform_sfn.py`](../infra/localstack/day2/transform_sfn.py) rewrites the shipped master-job JSON at init time — every hardcoded ARN in it (the lab account `377414509754`) becomes the ARN LocalStack actually assigned, and each Glue state is redirected to a local stand-in. `GLUE_MODE` chooses which, and how:
 
-* every `arn:aws:states:::glue:startJobRun.sync` state becomes a `lambda:invoke` of [`glue_stub.py`](../infra/localstack/day2/glue_stub.py), moving the Glue `Parameters.Arguments` into the Lambda `Payload`;
-* every hardcoded ARN in the shipped JSON — the lab account `377414509754` — is replaced with the ARN LocalStack actually assigned.
+**`bridge` (the default) — the jobs actually run.** Each `glue:startJobRun.sync` state becomes a `lambda:invoke.waitForTaskToken` of [`glue_bridge.py`](../infra/localstack/day2/glue_bridge.py). The bridge merges the job's *static* Glue arguments — the `DefaultArguments` from `infra/modules/day1/glue_jobs.tf`, shipped to it as [`glue_job_defaults.json`](../infra/localstack/day2/glue_job_defaults.json) — with the arguments the state computed, the state winning, exactly as the Glue service does. That merge is not cosmetic: the state passes `--catalog_conn`, but every job script reads `--p_catalog_conn`, so only the defaults close the gap. The bridge then files the merged arguments, the job name and the Step Functions task token as a `PENDING` row in `NT_Accelerate_LocalGlueQueue` and returns; the execution stays **paused on its task token**.
 
-The stub writes the same two rows a real Glue job would — one `NT_Accelerate_JOB_LOG` row and one `NT_Accelarate_JOB_STATUS` row, both marked `SUCCEEDED`. It is **local-only**: it is never part of the Terraform deployment, and `terraform apply` still ships the `glue:startJobRun.sync` states verbatim.
+[`run-glue-agent.sh`](../infra/localstack/run-glue-agent.sh) drains that queue: it claims a row atomically, runs the job for real with `run-glue.sh` (the same Glue 4.0 image + LocalStack + SQL Server path the Day 1 jobs use), and calls `SendTaskSuccess` / `SendTaskFailure` to resume the execution. So the run drives the *real* jobs and the `JOB_LOG` / `JOB_STATUS` rows it gates on carry real source/target counts. Concurrency defaults to 2 and each job's output is teed to `/tmp/nt-glue-agent/<job>-<id>.log`.
+
+**`stub` — the jobs are skipped.** Each state becomes a plain `lambda:invoke` of [`glue_stub.py`](../infra/localstack/day2/glue_stub.py), which records the same two `SUCCEEDED` rows itself and returns immediately. The orchestration is exercised in seconds, but no Glue job runs and the counts are fixed zeros; the stub stamps a `local stub: Glue job not executed` note into `ERROR_MSG` so a stubbed row is obvious.
+
+Both stand-ins are **local-only**: nothing under `infra/modules/` references them, and `terraform apply` still ships the `glue:startJobRun.sync` states verbatim. Switch modes in `.env` (`GLUE_MODE=stub`) — it is read by the init hook, so it takes effect on the next `docker compose up`.
 
 ### Run modes (NEW vs RERUN)
 
@@ -349,6 +362,8 @@ docker exec nt-localstack aws --endpoint-url http://localhost:4566 dynamodb upda
 
 infra/localstack/run-master-job.sh
 ```
+
+**A second `NEW` run on the same day runs nothing — on purpose.** The seven extraction jobs are configured `MULTIPLE_RUN=FALSE`, so `Is_Allow_Running` → `Check_Job_Ran_In_Day` consults `NT_Accelerate_JOB_LOG`: if a job already has a row for today's `RUN_DATE` it is reported `is_ran=Yes` and the branch jumps straight to `Update ... job status is SUCCEEDED`. That is the lab's single-run de-dup, identical in AWS. `down` / `up` gives you a clean slate (LocalStack holds no state across a restart), or you can clear the two tables and reset `MASTER_JOB_CONFIG` if you want to re-run without restarting.
 
 ### What the run left behind
 
@@ -371,9 +386,11 @@ docker exec nt-localstack aws --endpoint-url http://localhost:4566 stepfunctions
   --state-machine-arn arn:aws:states:us-east-1:000000000000:stateMachine:NT_Accelerate_Datalake_Master_Job
 ```
 
-### Two things to expect on a cold start
+### Three things to expect on a cold start
 
 **Lambda deployment is asynchronous, and slower than it looks.** LocalStack's new Lambda provider creates functions in a `Pending` state, like AWS. The init hook blocks on each function until it reports `Active` before declaring `[init-day2] ready:` — on a cold machine that means the *first* `up` also pulls the `python3.9` base image and can spend a minute or two on the first function. Wait for the ready line (`docker logs nt-localstack | grep '\[init-day2\] ready:'`) before your first run; invoking a `Pending` function fails with `Lambda.ResourceConflictException`.
+
+**The first bridge-mode run pulls the 9 GB Glue image.** `run-glue-agent.sh` runs each job through `run-glue.sh`, which starts the `glue` service (profile `tools`). If you have not run a Day 1 job yet, that first job waits on the image pull; later runs reuse it.
 
 **SES accepts the mail but does not deliver it.** LocalStack SES records the `SendEmail` call (and rejects unverified senders/recipients, which is why the init hook verifies both addresses), but nothing arrives in a real inbox — the notification is in the execution history, not your mail client.
 
@@ -517,7 +534,7 @@ The local stack is deliberately *not* a full emulator. Three differences are wor
 
 **The JDBC credentials are local, so the secret is rewritten in flight.** The Secrets Manager secret mirrors the cloud RDS instance (`admin` @ `localhost:1433`), while the job talks to the local container (`sa` @ `sqlserver:1433`); Shim 2 rewrites both on the way out. That means the incremental path is exercised end-to-end, but the local run does not prove that the cloud secret and the cloud RDS master user agree — apply to real RDS to check that.
 
-**The Day 2 Glue step is stubbed, not run.** Because LocalStack cannot run Glue, the master jobs' `glue:startJobRun.sync` tasks are rewritten to call a stub Lambda that records the same `JOB_LOG` / `JOB_STATUS` rows a real run would ([`glue_stub.py`](../infra/localstack/day2/glue_stub.py)). The **orchestration** — run modes, the parallel fan-out, status writes, the SES notification — is exercised for real, but the local run does not prove the Glue jobs themselves succeed, and the stub's counts are fixed placeholders rather than real source/target counts.
+**The Day 2 Glue step runs locally through a bridge, not through AWS Glue.** Because LocalStack cannot run Glue, the master jobs' `glue:startJobRun.sync` tasks are rewritten to the bridge ([`glue_bridge.py`](../infra/localstack/day2/glue_bridge.py) + [`run-glue-agent.sh`](../infra/localstack/run-glue-agent.sh)), which hands each job to the *same* local Glue runtime the Day 1 jobs use. The **orchestration** — run modes, the parallel fan-out, status writes, the SES notification — is exercised for real, and so are the **jobs** themselves (real Spark, real `JOB_LOG` / `JOB_STATUS` counts, real parquet). What the local run does *not* prove is the AWS-managed parts of Glue: the Data Catalog read (see above), the optimized `glueparquet` writer, and `glue:startJobRun.sync`'s own retries/concurrency. It also assumes every `--p_catalog_conn`-style argument the state omits is covered by the job's `DefaultArguments` in [`glue_job_defaults.json`](../infra/localstack/day2/glue_job_defaults.json) — a job that relies on a default not listed there would fail locally while succeeding in AWS. `GLUE_MODE=stub` falls back to the older skip-the-job behaviour, where none of this runs.
 
 ---
 

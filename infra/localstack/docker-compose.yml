@@ -63,6 +63,10 @@ services:
       DAY2_LAMBDA_DIR: /opt/day2-lambda
       DAY2_SFN_DIR: /opt/day2-sfn
       DAY2_HELPERS_DIR: /opt/day2
+      # How the master jobs' Glue states are stood in for locally: "bridge"
+      # (default) queues them for run-glue-agent.sh to run for real, "stub"
+      # fakes the result rows. See init/02-day2.sh.
+      GLUE_MODE: ${GLUE_MODE:-bridge}
       MAIL_SENDER: ${MAIL_SENDER:-elt.sender@example.com}
       MAIL_RECEIVERS: ${MAIL_RECEIVERS:-elt.receiver@example.com}
     volumes:

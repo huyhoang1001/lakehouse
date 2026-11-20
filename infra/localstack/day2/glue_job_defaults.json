@@ -1,0 +1,85 @@
+{
+  "_comment": [
+    "The static half of each Day 1 Glue job's DefaultArguments, copied from",
+    "infra/modules/day1/glue_jobs.tf. In AWS the Glue service merges a job's",
+    "DefaultArguments with the Arguments of a given run, the run winning; the",
+    "local bridge (glue_bridge.py) reproduces that merge so a local job sees",
+    "the same flags it would in the cloud.",
+    "",
+    "Only the constant arguments are listed. --p_run_date, --p_batch_id and",
+    "--p_region are Terraform variables there and are always supplied by the",
+    "state machine here, so a default for them would never be used. The",
+    "service-managed arguments (--TempDir, --extra-py-files,",
+    "--job-bookmark-option, ...) are omitted too: run-glue.sh provides their",
+    "local equivalents (--py-files, the openpyxl install) itself.",
+    "",
+    "Why this file matters: the state machine passes --catalog_conn, but every",
+    "job script reads --p_catalog_conn. Only DefaultArguments closes that gap,",
+    "here exactly as in the cloud. {bucket} is replaced with BUCKET_NAME."
+  ],
+  "jobs": {
+    "jb_Stg_Extract_Category": {
+      "--p_job_name": "jb_Stg_Extract_Category",
+      "--p_is_incremental_load": "False",
+      "--p_catalog_conn": "conRDS_tickit",
+      "--p_src_databaseName": "tickit",
+      "--p_src_tableName": "tickit_dbo_category",
+      "--p_tar_databaseName": "s3://{bucket}/lake/bronze/tickit/",
+      "--p_tar_tablename": "category"
+    },
+    "jb_Stg_Extract_Date": {
+      "--p_job_name": "jb_Stg_Extract_Date",
+      "--p_is_incremental_load": "False",
+      "--p_catalog_conn": "conRDS_tickit",
+      "--p_src_databaseName": "tickit",
+      "--p_src_tableName": "tickit_dbo_date",
+      "--p_tar_databaseName": "s3://{bucket}/lake/bronze/tickit/",
+      "--p_tar_tablename": "date"
+    },
+    "jb_Stg_Extract_Event": {
+      "--p_job_name": "jb_Stg_Extract_Event",
+      "--p_is_incremental_load": "False",
+      "--p_catalog_conn": "conRDS_tickit",
+      "--p_src_databaseName": "tickit",
+      "--p_src_tableName": "tickit_dbo_event",
+      "--p_tar_databaseName": "s3://{bucket}/lake/bronze/tickit/",
+      "--p_tar_tablename": "event"
+    },
+    "jb_Stg_Extract_Listing": {
+      "--p_job_name": "jb_Stg_Extract_Listing",
+      "--p_is_incremental_load": "False",
+      "--p_catalog_conn": "conRDS_tickit",
+      "--p_src_databaseName": "tickit",
+      "--p_src_tableName": "tickit_dbo_listing",
+      "--p_tar_databaseName": "s3://{bucket}/lake/bronze/tickit/",
+      "--p_tar_tablename": "listing"
+    },
+    "jb_Stg_Extract_Users": {
+      "--p_job_name": "jb_Stg_Extract_Users",
+      "--p_is_incremental_load": "False",
+      "--p_catalog_conn": "conRDS_tickit",
+      "--p_src_databaseName": "tickit",
+      "--p_src_tableName": "tickit_dbo_users",
+      "--p_tar_databaseName": "s3://{bucket}/lake/bronze/tickit/",
+      "--p_tar_tablename": "users"
+    },
+    "jb_Stg_Extract_Venue": {
+      "--p_job_name": "jb_Stg_Extract_Venue",
+      "--p_is_incremental_load": "False",
+      "--p_catalog_conn": "conRDS_tickit",
+      "--p_src_databaseName": "tickit",
+      "--p_src_tableName": "tickit_dbo_venue",
+      "--p_tar_databaseName": "s3://{bucket}/lake/bronze/tickit/",
+      "--p_tar_tablename": "venue"
+    },
+    "jb_Stg_Extract_Sales": {
+      "--p_job_name": "jb_Stg_Extract_Sales",
+      "--p_is_incremental_load": "True",
+      "--p_catalog_conn": "conRDS_tickit",
+      "--p_src_databaseName": "tickit",
+      "--p_src_tableName": "tickit_dbo_sales",
+      "--p_tar_databaseName": "s3://{bucket}/lake/bronze/tickit/",
+      "--p_tar_tablename": "sales"
+    }
+  }
+}
